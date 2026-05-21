@@ -8,6 +8,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.ZoneId
+import android.content.ContentUris
+import androidx.core.net.toUri
 
 class PhotoDataSource(private val context: Context) {
 
@@ -26,7 +28,6 @@ class PhotoDataSource(private val context: Context) {
         val uri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
         val projection = arrayOf(
             MediaStore.Images.Media._ID,
-            MediaStore.Images.Media.DATA,       // 파일 절대 경로
             MediaStore.Images.Media.DATE_TAKEN  // 촬영 시각 (epoch millis)
         )
         val selection = "${MediaStore.Images.Media.DATE_TAKEN} BETWEEN ? AND ?"
@@ -38,19 +39,25 @@ class PhotoDataSource(private val context: Context) {
         )
 
         cursor?.use {
-            val dataIdx = it.getColumnIndex(MediaStore.Images.Media.DATA)
+            val idIdx = it.getColumnIndex(MediaStore.Images.Media._ID)
             val takenIdx = it.getColumnIndex(MediaStore.Images.Media.DATE_TAKEN)
 
             while (it.moveToNext()) {
-                val filePath = it.getString(dataIdx) ?: continue
+                val imageId = it.getLong(idIdx)
                 val takenAt = it.getLong(takenIdx)
 
-                // EXIF에서 GPS 좌표 추출
-                val (lat, lon) = extractGps(filePath)
+                val contentUri =
+                    ContentUris.withAppendedId(
+                        MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                        imageId
+                    )
+
+                val (lat, lon) =
+                    extractGps(contentUri.toString())
 
                 photos.add(
                     PhotoMeta(
-                        uri = filePath,
+                        uri = contentUri.toString(),
                         takenAt = takenAt,
                         latitude = lat,
                         longitude = lon
@@ -63,15 +70,23 @@ class PhotoDataSource(private val context: Context) {
     }
 
     // EXIF에서 위도/경도 파싱. GPS 정보 없는 사진은 0.0으로 반환
-    private fun extractGps(filePath: String): Pair<Double, Double> {
+    private fun extractGps(uri: String): Pair<Double, Double> {
         return try {
-            val exif = ExifInterface(filePath)
+            val input =
+                context.contentResolver.openInputStream(
+                    uri.toUri()
+                ) ?: return 0.0 to 0.0
+
+            val exif = ExifInterface(input)
+
             val latLon = FloatArray(2)
+
             if (exif.getLatLong(latLon)) {
                 latLon[0].toDouble() to latLon[1].toDouble()
             } else {
                 0.0 to 0.0
             }
+
         } catch (e: Exception) {
             0.0 to 0.0
         }

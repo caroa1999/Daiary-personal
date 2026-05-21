@@ -53,6 +53,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.TextButton
 import com.smu.daiary.R
 import com.smu.daiary.ui.theme.DaiaryTheme
 import com.smu.daiary.ui.theme.LocalDarkTheme
@@ -63,6 +67,7 @@ fun BlockSelectionScreen(
     viewModel: WriteViewModel,
     onNext: () -> Unit,
     onBack: () -> Unit,
+    onPhotoClick: () -> Unit,
     onRetry: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -72,6 +77,9 @@ fun BlockSelectionScreen(
     val blocks by viewModel.blocks.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoadingBlocks.collectAsStateWithLifecycle()
     val selectedCount = blocks.count { it.isSelected }
+
+    val photos by viewModel.photos.collectAsStateWithLifecycle()
+    val selectedPhotoCount = photos.count { it.isSelected }
 
     Scaffold(
         modifier = modifier,
@@ -186,13 +194,21 @@ fun BlockSelectionScreen(
                 items(blocks) { block ->
                     BlockItem(
                         block = block,
-                        onClick = { viewModel.toggleBlock(block.id) }
+                        onClick = {
+                            if (block.type == BlockType.PHOTO) {
+                                onPhotoClick()
+                            } else {
+                                viewModel.toggleBlock(block.id)
+                            }
+
+                        }
                     )
+                }
                 }
             }
         }
     }
-}
+
 
 @Composable
 private fun BlockItem(block: ContentBlock, onClick: () -> Unit) {
@@ -258,6 +274,7 @@ private fun BlockItem(block: ContentBlock, onClick: () -> Unit) {
         }
     }
 }
+
 
 private fun blockTypeIcon(type: BlockType): ImageVector = when (type) {
     BlockType.PAYMENT  -> Icons.Outlined.CreditCard

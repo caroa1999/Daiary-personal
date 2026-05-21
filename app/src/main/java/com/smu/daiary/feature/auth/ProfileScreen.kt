@@ -62,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.core.os.LocaleListCompat
+import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -100,6 +101,7 @@ private object ProfileColors {
 @Composable
 fun ProfileScreen(
     authViewModel: AuthViewModel,
+    navController: NavController,
     onBack: () -> Unit,
     isDarkMode: Boolean,
     onDarkModeChange: (Boolean) -> Unit,
@@ -253,6 +255,13 @@ fun ProfileScreen(
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Medium
                             )
+                        }
+                        TextButton(
+                            onClick = {
+                                navController.navigate("settings")
+                            }
+                        ) {
+                            Text("MBTI 설정")
                         }
                     }
                 }

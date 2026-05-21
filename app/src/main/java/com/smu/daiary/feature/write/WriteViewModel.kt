@@ -12,6 +12,7 @@ import com.smu.daiary.data.repository.DiaryRepository
 import com.smu.daiary.data.source.CalendarDataSource
 import com.smu.daiary.data.source.PhotoDataSource
 import com.smu.daiary.data.source.WeatherDataSource
+import com.smu.daiary.data.remote.ClaudeApi
 import com.smu.daiary.R
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -21,12 +22,19 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import android.net.Uri
+import android.util.Base64
+import java.io.ByteArrayOutputStream
+
 
 private const val TAG = "WriteViewModel"
 
@@ -52,10 +60,17 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
     private val weatherDataSource = WeatherDataSource(context)
     private val photoDataSource = PhotoDataSource(context)
     private val calendarDataSource = CalendarDataSource(context)
+    private val claudeApi = ClaudeApi()
 
     // 블록 목록 (실제 수집 데이터로 채워짐)
     private val _blocks = MutableStateFlow<List<ContentBlock>>(emptyList())
     val blocks: StateFlow<List<ContentBlock>> = _blocks.asStateFlow()
+
+    private val _photos =
+        MutableStateFlow<List<PhotoSelectableItem>>(emptyList())
+
+    val photos =
+        _photos.asStateFlow()
 
     // 데이터 로딩 상태
     private val _isLoadingBlocks = MutableStateFlow(false)
@@ -92,6 +107,7 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _isLoadingBlocks.value = true
             _blocks.value = emptyList()
+            _photos.value = emptyList()
 
             val date = LocalDate.now().toString()
             val blocks = mutableListOf<ContentBlock>()
@@ -153,11 +169,34 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
                 .onSuccess { photos ->
                     Log.d(TAG, "🖼️ 사진 수집 완료: ${photos.size}장")
                     dailyDataRepository.updatePhotos(userId, date, photos)
-                    if (photos.isNotEmpty()) {
-                        blocks.add(ContentBlock(id = "photo", type = BlockType.PHOTO, content = localizedContext().getString(R.string.block_photo_count, photos.size)))
+
+                    _photos.value = photos.map { photo ->
+                        PhotoSelectableItem(
+                            uri = photo.uri,
+                            isSelected = true
+                        )
                     }
+
+                        blocks.add(
+                            ContentBlock(
+                                id = "photo",
+                                type = BlockType.PHOTO,
+                                content = "오늘 찍은 사진 ${photos.size}장 · 선택 ${photos.size}장",
+                                isSelected = photos.isNotEmpty()
+                                )
+                            )
+
                 }
-                .onFailure { Log.w(TAG, "⚠️ 사진 수집 실패 (권한 문제)", it) }
+                .onFailure {
+                    Log.w(TAG, "⚠️ 사진 수집 실패 (권한 문제)", it)
+                    blocks.add(
+                        ContentBlock(
+                            id = "photo_error",
+                            type = BlockType.PHOTO,
+                            content = "사진을 불러오지 못했습니다"
+                        )
+                    )
+                }
 
             // 결제 내역 (NotificationListenerService가 Firestore에 저장해둔 데이터를 읽어옴)
             dailyDataRepository.getDailyData(userId, date)
@@ -187,6 +226,32 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
         "바람" -> localizedContext().getString(R.string.weather_wind)
         else   -> canonical
     }
+    private fun uriToBase64(uriString: String): String? {
+        return try {
+            val uri = Uri.parse(uriString)
+
+            context.contentResolver
+                .openInputStream(uri)
+                ?.use { input ->
+
+                    val bytes =
+                        input.readBytes()
+
+                    Base64.encodeToString(
+                        bytes,
+                        Base64.NO_WRAP
+                    )
+                }
+
+        } catch (e: Exception) {
+            Log.e(
+                TAG,
+                "이미지 Base64 변환 실패",
+                e
+            )
+            null
+        }
+    }
 
     fun toggleBlock(id: String) {
         _blocks.update { list ->
@@ -194,17 +259,73 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun generateDraft() {
+    fun togglePhoto(uri: String) {
+        _photos.update { list ->
+            list.map { photo ->
+                if (photo.uri == uri) {
+                    photo.copy(isSelected = !photo.isSelected)
+                } else {
+                    photo
+                }
+            }
+        }
+    }
+
+    fun setAllPhotosSelected(selected: Boolean) {
+        _photos.update { list ->
+            list.map { photo ->
+                photo.copy(isSelected = selected)
+            }
+        }
+    }
+
+    fun syncPhotoBlockSelection() {
+        val totalCount = _photos.value.size
+        val selectedCount = _photos.value.count { it.isSelected }
+        val hasSelectedPhoto = _photos.value.any { it.isSelected }
+
+        _blocks.update { list ->
+            list.map { block ->
+                if (block.type == BlockType.PHOTO) {
+                    block.copy(
+                        content = "오늘 찍은 사진 ${totalCount}장 · 선택 ${selectedCount}장",
+                        isSelected = hasSelectedPhoto
+                    )
+                } else {
+                    block
+                }
+            }
+        }
+    }
+
+
+
+    fun generateDraft() = viewModelScope.launch {
         val selected = _blocks.value.filter { it.isSelected }
-        if (selected.isEmpty()) return
+        if (selected.isEmpty()) return@launch
         val today = LocalDate.now().toString()
+        val prefs =
+            getApplication<Application>()
+                .getSharedPreferences(
+                    "user_settings",
+                    Context.MODE_PRIVATE
+                )
+
+        val mbti =
+            prefs.getString("mbti", "INFP") ?: "INFP"
+
+        val selectedPhotos =
+            photos.value.count { it.isSelected }
+
         val content = buildString {
             appendLine(localizedContext().getString(R.string.draft_intro))
-            appendLine()
             selected.forEach { block ->
                 when (block.type) {
                     BlockType.PAYMENT  -> appendLine(localizedContext().getString(R.string.draft_block_payment, block.content))
-                    BlockType.PHOTO    -> appendLine(localizedContext().getString(R.string.draft_block_photo, block.content))
+                    BlockType.PHOTO ->
+                        appendLine(
+                            "오늘 선택한 사진은 ${selectedPhotos}장이었다."
+                        )
                     BlockType.CALENDAR -> appendLine(localizedContext().getString(R.string.draft_block_calendar, block.content))
                     BlockType.HEALTH   -> appendLine(localizedContext().getString(R.string.draft_block_health, block.content))
                     BlockType.WEATHER  -> appendLine(localizedContext().getString(R.string.draft_block_weather, block.content))
@@ -213,7 +334,56 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
             appendLine()
             append(localizedContext().getString(R.string.draft_outro))
         }
-        _draft.value = DiaryDraft(date = today, aiContent = content)
+        val aiDiary =
+            try {
+
+                val selectedPhotoBase64 =
+                    _photos.value
+                        .filter { it.isSelected }
+                        .mapNotNull {
+                            uriToBase64(it.uri)
+                        }
+
+                val photoSummary =
+                    withContext(Dispatchers.IO) {
+                        try {
+                            claudeApi.analyzePhotos(
+                                selectedPhotoBase64
+                            )
+                        } catch (e: Exception) {
+
+                            "사진 ${selectedPhotoBase64.size}장이 선택됨"
+
+                        }
+                    }
+                Log.d(TAG, "📸 사진 분석 결과: $photoSummary")
+
+                withContext(Dispatchers.IO) {
+
+                    claudeApi.generateDiary(
+                        content = content,
+                        mbti = mbti,
+                        photoSummary = photoSummary
+                    )
+
+                }
+
+            } catch (e: Exception) {
+
+                Log.e(
+                    TAG,
+                    "AI 일기 생성 실패",
+                    e
+                )
+
+                "AI 응답이 지연되어 초안을 생성하지 못했어요.\n잠시 후 다시 시도해 주세요."
+            }
+
+        _draft.value =
+            DiaryDraft(
+                date = today,
+                aiContent = aiDiary
+            )
     }
 
     fun updateEditedContent(content: String) {
@@ -244,6 +414,11 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
                 else -> "neutral"
             }
             val existingId = _existingEntryId.value
+
+            val selectedPhotoUris = _photos.value
+                .filter { it.isSelected }
+                .map { it.uri }
+
             val entry = DiaryEntry(
                 id = existingId ?: "",
                 title = formattedTitle,
@@ -252,7 +427,7 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
                 mood = mood,
                 emotion = _selectedEmotion.value ?: "",
                 weather = _selectedWeather.value ?: "",
-                photos = d.photos
+                photos = selectedPhotoUris
             )
             val result = if (existingId != null) {
                 diaryRepository.updateDiary(userId, entry)

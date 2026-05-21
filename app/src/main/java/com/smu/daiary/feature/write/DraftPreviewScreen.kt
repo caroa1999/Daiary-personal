@@ -2,6 +2,7 @@ package com.smu.daiary.feature.write
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,7 +46,10 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import coil.compose.AsyncImage
@@ -54,11 +58,17 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import android.net.Uri
 import com.smu.daiary.R
 import com.smu.daiary.ui.theme.DaiaryTheme
 import com.smu.daiary.ui.theme.LocalDarkTheme
 import java.time.LocalDate
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
+import android.util.Log
 
 private val weatherIconMap: Map<String, ImageVector> = mapOf(
     "맑음" to Icons.Outlined.WbSunny,
@@ -102,7 +112,10 @@ fun DraftPreviewScreen(
     val isSaving by viewModel.isSaving.collectAsStateWithLifecycle()
     val selectedWeather by viewModel.selectedWeather.collectAsStateWithLifecycle()
     val selectedEmotion by viewModel.selectedEmotion.collectAsStateWithLifecycle()
+    val photos by viewModel.photos.collectAsStateWithLifecycle()
+    val selectedPhotos = photos.filter { it.isSelected }
     val displayText = draft?.editedContent ?: draft?.aiContent ?: ""
+    var selectedImageUri by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         modifier = modifier,
@@ -212,6 +225,8 @@ fun DraftPreviewScreen(
                 color = wc.SurfaceBg,
                 border = BorderStroke(0.5.dp, wc.Border)
             ) {
+                Column {
+
                 Text(
                     text = displayText,
                     modifier = Modifier
@@ -221,40 +236,73 @@ fun DraftPreviewScreen(
                     lineHeight = 24.sp,
                     color = wc.TextPrimary
                 )
-            }
+                    val photos = draft?.photos.orEmpty()
 
-            val photos = draft?.photos.orEmpty()
-            if (photos.isNotEmpty()) {
-                Text(
-                    text = stringResource(R.string.attached_photos),
-                    fontSize = 12.sp,
-                    color = wc.TextMuted,
-                    fontWeight = FontWeight.Medium
-                )
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    items(photos) { uri ->
-                        Box(
-                            modifier = Modifier
-                                .size(80.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(wc.PurpleLight)
+                    if (selectedPhotos.isNotEmpty()) {
+
+                        LazyRow(
+                            horizontalArrangement =
+                                Arrangement.spacedBy(12.dp),
+
+                            modifier =
+                                Modifier.padding(
+                                    start = 20.dp,
+                                    bottom = 20.dp,
+                                    end = 20.dp
+                                )
                         ) {
-                            AsyncImage(
-                                model = uri,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
+
+                            items(selectedPhotos) { photo ->
+                                Surface(
+                                    onClick = {
+                                        Log.d("DraftPreview", "selected photo clicked uri=${photo.uri}")
+                                        selectedImageUri = photo.uri
+                                    },
+                                    modifier = Modifier.size(120.dp),
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = wc.PurpleLight
+                                ) {
+                                    AsyncImage(
+                                        model = photo.uri,
+                                        contentDescription = null,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                }
+                            }
+
                         }
+
                     }
+
                 }
+            }
+            }
+        }
+    if (selectedImageUri != null) {
+        Dialog(
+            onDismissRequest = { selectedImageUri = null }
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.White)
+                    .padding(12.dp)
+            ) {
+                AsyncImage(
+                    model = selectedImageUri,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(20.dp)),
+                    contentScale = ContentScale.Fit
+                )
             }
         }
     }
 }
+
+
 
 @Composable
 private fun MetaChip(icon: ImageVector, label: String) {
@@ -325,6 +373,8 @@ private fun DraftPreviewScreenPreview() {
                     }
                 }
             }
+
+
         ) { padding ->
             Column(
                 modifier = Modifier
@@ -357,5 +407,6 @@ private fun DraftPreviewScreenPreview() {
                 }
             }
         }
+
     }
 }
