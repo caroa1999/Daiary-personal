@@ -45,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -53,21 +54,14 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
+import androidx.compose.material.icons.outlined.BrokenImage
 import coil.compose.AsyncImage
+import coil.compose.AsyncImagePainter
 import com.smu.daiary.R
 import com.smu.daiary.data.model.DiaryEntry
 import com.smu.daiary.ui.theme.DaiaryTheme
 import com.smu.daiary.ui.theme.LocalDarkTheme
 import java.time.LocalDate
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.graphics.Color
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.material3.Surface
 
 private val weatherIcons: Map<String, ImageVector> = mapOf(
     "맑음" to Icons.Outlined.WbSunny,
@@ -240,21 +234,41 @@ fun DiaryDetailScreen(
                             modifier = Modifier
                                 .size(80.dp)
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(wc.PurpleLight)
+                                .background(wc.PurpleLight),
+                            contentAlignment = Alignment.Center
                         ) {
                             Surface(
-                                onClick = {
-                                    selectedImageUri = uri
-                                },
+                                onClick = { selectedImageUri = uri },
                                 modifier = Modifier.size(80.dp),
                                 shape = RoundedCornerShape(12.dp)
                             ) {
+                                var imageState by remember { mutableStateOf<AsyncImagePainter.State?>(null) }
+
                                 AsyncImage(
                                     model = uri,
                                     contentDescription = null,
+                                    contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
+                                    onState = { imageState = it }
                                 )
+
+                                if (imageState is AsyncImagePainter.State.Loading) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(24.dp),
+                                        color = wc.Purple,
+                                        strokeWidth = 2.dp
+                                    )
+                                }
+
+
+                                if (imageState is AsyncImagePainter.State.Error) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.BrokenImage,
+                                        contentDescription = null,
+                                        tint = wc.TextMuted,
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                }
                             }
                         }
                     }

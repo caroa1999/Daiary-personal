@@ -57,6 +57,7 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
     // Repositories & DataSources
     private val diaryRepository = DiaryRepository()
     private val dailyDataRepository = DailyDataRepository()
+    private val aiRepository = com.smu.daiary.data.repository.AiRepository()
     private val weatherDataSource = WeatherDataSource(context)
     private val photoDataSource = PhotoDataSource(context)
     private val calendarDataSource = CalendarDataSource(context)
@@ -90,6 +91,13 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _selectedEmotion = MutableStateFlow<String?>(null)
     val selectedEmotion: StateFlow<String?> = _selectedEmotion.asStateFlow()
+
+    // AI 초안 생성 상태
+    private val _isGenerating = MutableStateFlow(false)
+    val isGenerating: StateFlow<Boolean> = _isGenerating.asStateFlow()
+
+    private val _generateError = MutableStateFlow<String?>(null)
+    val generateError: StateFlow<String?> = _generateError.asStateFlow()
 
     // 저장 완료 이벤트 (스낵바 표시용)
     private val _saveEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -302,89 +310,64 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
 
     fun generateDraft() = viewModelScope.launch {
         val selected = _blocks.value.filter { it.isSelected }
-        if (selected.isEmpty()) return@launch
+        if (selected.isEmpty()) return
         val today = LocalDate.now().toString()
-        val prefs =
-            getApplication<Application>()
-                .getSharedPreferences(
-                    "user_settings",
-                    Context.MODE_PRIVATE
-                )
 
-        val mbti =
-            prefs.getString("mbti", "INFP") ?: "INFP"
+        viewModelScope.launch {
+            _isGenerating.value = true
+            _generateError.value = null
 
-        val selectedPhotos =
-            photos.value.count { it.isSelected }
+            val prefs = context.getSharedPreferences("daiary_settings", android.content.Context.MODE_PRIVATE)
+            val locale = if (prefs.getString("language", "한국어") == "English") "en" else "ko"
 
-        val content = buildString {
-            appendLine(localizedContext().getString(R.string.draft_intro))
-            selected.forEach { block ->
-                when (block.type) {
-                    BlockType.PAYMENT  -> appendLine(localizedContext().getString(R.string.draft_block_payment, block.content))
-                    BlockType.PHOTO ->
-                        appendLine(
-                            "오늘 선택한 사진은 ${selectedPhotos}장이었다."
-                        )
-                    BlockType.CALENDAR -> appendLine(localizedContext().getString(R.string.draft_block_calendar, block.content))
-                    BlockType.HEALTH   -> appendLine(localizedContext().getString(R.string.draft_block_health, block.content))
-                    BlockType.WEATHER  -> appendLine(localizedContext().getString(R.string.draft_block_weather, block.content))
-                }
-            }
-            appendLine()
-            append(localizedContext().getString(R.string.draft_outro))
-        }
-        val aiDiary =
-            try {
+            val selectedPhotoBase64 =
+                _photos.value
+                    .filter { it.isSelected }
+                    .mapNotNull { uriToBase64(it.uri) }
 
-                val selectedPhotoBase64 =
-                    _photos.value
-                        .filter { it.isSelected }
-                        .mapNotNull {
-                            uriToBase64(it.uri)
-                        }
-
-                val photoSummary =
-                    withContext(Dispatchers.IO) {
-                        try {
-                            claudeApi.analyzePhotos(
-                                selectedPhotoBase64
-                            )
-                        } catch (e: Exception) {
-
-                            "사진 ${selectedPhotoBase64.size}장이 선택됨"
-
-                        }
-                    }
-                Log.d(TAG, "📸 사진 분석 결과: $photoSummary")
-
+            val photoSummary =
                 withContext(Dispatchers.IO) {
-
-                    claudeApi.generateDiary(
-                        content = content,
-                        mbti = mbti,
-                        photoSummary = photoSummary
-                    )
-
+                    try {
+                        claudeApi.analyzePhotos(selectedPhotoBase64)
+                    } catch (e: Exception) {
+                        "사진 ${selectedPhotoBase64.size}장이 선택됨"
+                    }
                 }
 
-            } catch (e: Exception) {
+            Log.d(TAG, "📸 사진 분석 결과: $photoSummary")
 
-                Log.e(
-                    TAG,
-                    "AI 일기 생성 실패",
-                    e
-                )
+            val result = aiRepository.generateDraft(selected, locale)
+            val content = result.getOrElse { fallbackTemplate(selected) }
 
-                "AI 응답이 지연되어 초안을 생성하지 못했어요.\n잠시 후 다시 시도해 주세요."
+            if (result.isFailure) {
+                _generateError.value = if (locale == "en")
+                    "AI generation failed. Using default template."
+                else
+                    "초안 생성에 실패했습니다. 기본 템플릿으로 대체합니다."
             }
 
-        _draft.value =
-            DiaryDraft(
-                date = today,
-                aiContent = aiDiary
-            )
+            _draft.value = DiaryDraft(date = today, aiContent = content)
+            _isGenerating.value = false
+        }
     }
+
+    private fun fallbackTemplate(selected: List<ContentBlock>): String = buildString {
+        appendLine(localizedContext().getString(R.string.draft_intro))
+        appendLine()
+        selected.forEach { block ->
+            when (block.type) {
+                BlockType.PAYMENT  -> appendLine(localizedContext().getString(R.string.draft_block_payment, block.content))
+                BlockType.PHOTO    -> appendLine(localizedContext().getString(R.string.draft_block_photo, block.content))
+                BlockType.CALENDAR -> appendLine(localizedContext().getString(R.string.draft_block_calendar, block.content))
+                BlockType.HEALTH   -> appendLine(localizedContext().getString(R.string.draft_block_health, block.content))
+                BlockType.WEATHER  -> appendLine(localizedContext().getString(R.string.draft_block_weather, block.content))
+            }
+        }
+        appendLine()
+        append(localizedContext().getString(R.string.draft_outro))
+    }
+
+    fun clearGenerateError() { _generateError.value = null }
 
     fun updateEditedContent(content: String) {
         _draft.update { it?.copy(editedContent = content) }

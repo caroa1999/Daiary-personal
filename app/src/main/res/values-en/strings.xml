@@ -38,6 +38,7 @@
     <string name="btn_save">Save</string>
     <string name="btn_edit">Edit</string>
     <string name="attached_photos">Attached Photos</string>
+    <string name="photo_load_error">Unable to load photo</string>
 
     <!-- DiaryEditScreen -->
     <string name="screen_diary_edit">Edit Diary</string>
@@ -62,6 +63,7 @@
     <string name="setting_language">Language</string>
     <string name="setting_diary_notification">Diary Reminder</string>
     <string name="setting_notification_time">Reminder Time</string>
+    <string name="setting_payment_notification">Payment Notification</string>
     <string name="section_privacy">Privacy</string>
     <string name="privacy_policy">Privacy Policy</string>
     <string name="terms_of_service">Terms of Service</string>
@@ -74,6 +76,9 @@
     <string name="dialog_notification_time_title">Set Reminder Time</string>
     <string name="hour_label">Hour</string>
     <string name="minute_label">Min</string>
+    <string name="dialog_notification_listener_title">Notification Access Required</string>
+    <string name="dialog_notification_listener_message">Daiary needs notification access to automatically detect payment activity.\nPlease enable Daiary in the settings screen.</string>
+    <string name="dialog_notification_listener_confirm">Go to Settings</string>
     <string name="dialog_logout_title">Logout</string>
     <string name="dialog_logout_message">Are you sure you want to log out?</string>
     <string name="dialog_delete_title">Delete Account</string>

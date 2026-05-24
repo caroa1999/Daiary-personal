@@ -45,6 +45,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -52,7 +53,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.material.icons.outlined.BrokenImage
 import coil.compose.AsyncImage
+import coil.compose.AsyncImagePainter
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -225,8 +228,6 @@ fun DraftPreviewScreen(
                 color = wc.SurfaceBg,
                 border = BorderStroke(0.5.dp, wc.Border)
             ) {
-                Column {
-
                 Text(
                     text = displayText,
                     modifier = Modifier
@@ -236,73 +237,41 @@ fun DraftPreviewScreen(
                     lineHeight = 24.sp,
                     color = wc.TextPrimary
                 )
-                    val photos = draft?.photos.orEmpty()
-
-                    if (selectedPhotos.isNotEmpty()) {
-
-                        LazyRow(
-                            horizontalArrangement =
-                                Arrangement.spacedBy(12.dp),
-
-                            modifier =
-                                Modifier.padding(
-                                    start = 20.dp,
-                                    bottom = 20.dp,
-                                    end = 20.dp
-                                )
-                        ) {
-
-                            items(selectedPhotos) { photo ->
-                                Surface(
-                                    onClick = {
-                                        Log.d("DraftPreview", "selected photo clicked uri=${photo.uri}")
-                                        selectedImageUri = photo.uri
-                                    },
-                                    modifier = Modifier.size(120.dp),
-                                    shape = RoundedCornerShape(16.dp),
-                                    color = wc.PurpleLight
-                                ) {
-                                    AsyncImage(
-                                        model = photo.uri,
-                                        contentDescription = null,
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                }
-                            }
-
-                        }
-
-                    }
-
-                }
             }
-            }
-        }
-    if (selectedImageUri != null) {
-        Dialog(
-            onDismissRequest = { selectedImageUri = null }
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color.White)
-                    .padding(12.dp)
-            ) {
-                AsyncImage(
-                    model = selectedImageUri,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(20.dp)),
-                    contentScale = ContentScale.Fit
+
+            val photos = draft?.photos.orEmpty()
+            if (photos.isNotEmpty()) {
+                Text(
+                    text = stringResource(R.string.attached_photos),
+                    fontSize = 12.sp,
+                    color = wc.TextMuted,
+                    fontWeight = FontWeight.Medium
                 )
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(selectedPhotos) { photo ->
+                        Box(
+                            modifier = Modifier
+                                .size(80.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(wc.PurpleLight)
+                                .clickable { selectedImageUri = photo.uri }
+                        ) {
+                            AsyncImage(
+                                model = photo.uri,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+                }
             }
         }
     }
 }
-
-
 
 @Composable
 private fun MetaChip(icon: ImageVector, label: String) {
@@ -373,8 +342,6 @@ private fun DraftPreviewScreenPreview() {
                     }
                 }
             }
-
-
         ) { padding ->
             Column(
                 modifier = Modifier
@@ -407,6 +374,5 @@ private fun DraftPreviewScreenPreview() {
                 }
             }
         }
-
     }
 }
