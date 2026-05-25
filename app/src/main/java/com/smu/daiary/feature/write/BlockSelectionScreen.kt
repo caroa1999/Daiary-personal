@@ -43,6 +43,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -92,8 +94,15 @@ fun BlockSelectionScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     // AI 초안 생성 완료 → 다음 화면 자동 전환
+    var hasNavigatedToPreview by remember {
+        mutableStateOf(false)
+    }
+
     LaunchedEffect(draft) {
-        if (draft != null) onNext()
+        if (draft != null && !hasNavigatedToPreview) {
+            hasNavigatedToPreview = true
+            onNext()
+        }
     }
 
     // 생성 오류 → 스낵바 표시

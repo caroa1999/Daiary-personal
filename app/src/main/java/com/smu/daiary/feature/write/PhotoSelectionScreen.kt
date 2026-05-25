@@ -107,7 +107,7 @@ fun PhotoSelectionScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         AsyncImage(
-                            model = Uri.parse(photo.uri),
+                            model = photo.uri,
                             contentDescription = "사진",
                             modifier = Modifier
                                 .size(72.dp)

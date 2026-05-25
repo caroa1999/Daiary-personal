@@ -133,7 +133,11 @@ fun ProfileScreen(
 
     val currentUser = FirebaseAuth.getInstance().currentUser
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("daiary_settings", Context.MODE_PRIVATE) }
+    val prefs = remember { context.getSharedPreferences("user_settings", Context.MODE_PRIVATE) }
+
+    var currentMbti by remember {
+        mutableStateOf(prefs.getString("mbti", "ENFJ") ?: "ENFJ")
+    }
 
     var language by remember { mutableStateOf(prefs.getString("language", "한국어") ?: "한국어") }
     var notificationEnabled by remember { mutableStateOf(prefs.getBoolean("notification_enabled", true)) }
@@ -146,6 +150,7 @@ fun ProfileScreen(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 paymentListenerEnabled = isNotificationListenerEnabled(context)
+                currentMbti = prefs.getString("mbti", "ENFJ") ?: "ENFJ"
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -280,13 +285,7 @@ fun ProfileScreen(
                                 fontWeight = FontWeight.Medium
                             )
                         }
-                        TextButton(
-                            onClick = {
-                                navController.navigate("settings")
-                            }
-                        ) {
-                            Text("MBTI 설정")
-                        }
+
                     }
                 }
             }
@@ -295,6 +294,16 @@ fun ProfileScreen(
             ProfileSectionLabel(stringResource(R.string.section_app_settings))
             ProfileCard {
                 Column {
+                    ArrowRow(
+                        label = "AI 작성 스타일",
+                        value = currentMbti,
+                        onClick = {
+                            navController.navigate("settings")
+                        }
+                    )
+
+                    ProfileDivider()
+
                     SwitchRow(
                         label = stringResource(R.string.setting_dark_mode),
                         checked = isDarkMode,

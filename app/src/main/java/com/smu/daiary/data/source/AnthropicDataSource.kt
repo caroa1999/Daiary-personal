@@ -22,10 +22,26 @@ class AnthropicDataSource {
 
     private val jsonMediaType = "application/json".toMediaType()
 
-    suspend fun generateDiary(blocks: List<ContentBlock>, locale: String): String =
+    suspend fun generateDiary(
+        blocks: List<ContentBlock>,
+        locale: String,
+        photoSummary: String? = null
+    ): String =
         withContext(Dispatchers.IO) {
             val blocksText = blocks.joinToString("\n") { "- [${it.type.label}] ${it.content}" }
-            val prompt = buildPrompt(blocksText, locale)
+
+            val photoText = photoSummary
+                ?.takeIf { it.isNotBlank() }
+                ?.let {
+                    if (locale == "en") {
+                        "\n\nPhoto analysis result:\n$it"
+                    } else {
+                        "\n\n사진 분석 결과:\n$it"
+                    }
+                }
+                ?: ""
+
+            val prompt = buildPrompt(blocksText + photoText, locale)
 
             val body = JSONObject().apply {
                 put("model", "claude-haiku-4-5-20251001")

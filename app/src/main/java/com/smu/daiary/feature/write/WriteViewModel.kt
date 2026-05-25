@@ -310,7 +310,7 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
 
     fun generateDraft() = viewModelScope.launch {
         val selected = _blocks.value.filter { it.isSelected }
-        if (selected.isEmpty()) return
+        if (selected.isEmpty()) return@launch
         val today = LocalDate.now().toString()
 
         viewModelScope.launch {
@@ -325,18 +325,27 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
                     .filter { it.isSelected }
                     .mapNotNull { uriToBase64(it.uri) }
 
+            Log.d(TAG, "📸 선택된 사진 수: ${_photos.value.count { it.isSelected }}")
+            Log.d(TAG, "📸 base64 변환 성공 수: ${selectedPhotoBase64.size}")
+
             val photoSummary =
                 withContext(Dispatchers.IO) {
                     try {
                         claudeApi.analyzePhotos(selectedPhotoBase64)
                     } catch (e: Exception) {
+                        Log.e(TAG, "❌ 사진 분석 실패", e)
                         "사진 ${selectedPhotoBase64.size}장이 선택됨"
                     }
                 }
 
             Log.d(TAG, "📸 사진 분석 결과: $photoSummary")
 
-            val result = aiRepository.generateDraft(selected, locale)
+            val result =
+                aiRepository.generateDraft(
+                    blocks = selected,
+                    locale = locale,
+                    photoSummary = photoSummary
+                )
             val content = result.getOrElse { fallbackTemplate(selected) }
 
             if (result.isFailure) {
@@ -346,7 +355,16 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
                     "초안 생성에 실패했습니다. 기본 템플릿으로 대체합니다."
             }
 
-            _draft.value = DiaryDraft(date = today, aiContent = content)
+            val selectedPhotoUris =
+                _photos.value
+                    .filter { it.isSelected }
+                    .map { it.uri }
+
+            _draft.value = DiaryDraft(
+                date = today,
+                aiContent = content,
+                photos = selectedPhotoUris
+            )
             _isGenerating.value = false
         }
     }
@@ -437,6 +455,10 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
         )
         _selectedWeather.value = entry.weather.ifEmpty { null }
         _selectedEmotion.value = entry.emotion.ifEmpty { null }
+    }
+
+    fun clearDraftOnly() {
+        _draft.value = null
     }
 
     fun resetDraft() {

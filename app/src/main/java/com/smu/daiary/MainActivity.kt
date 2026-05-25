@@ -251,7 +251,14 @@ class MainActivity : ComponentActivity() {
                                 composable("block_selection") {
                                     BlockSelectionScreen(
                                         viewModel = writeViewModel,
-                                        onNext = { navController.navigate("draft_preview") },
+                                        onNext = {
+                                            navController.navigate("draft_preview") {
+                                                popUpTo("block_selection") {
+                                                    inclusive = false
+                                                }
+                                                launchSingleTop = true
+                                            }
+                                        },
                                         onBack = { navController.popBackStack() },
                                         onPhotoClick = {
                                             navController.navigate("photo_selection")
@@ -273,12 +280,30 @@ class MainActivity : ComponentActivity() {
                                     DraftPreviewScreen(
                                         viewModel = writeViewModel,
                                         userId = userId,
-                                        onEdit = { navController.navigate("diary_edit") },
+
+                                        onEdit = {
+                                            navController.navigate("diary_edit")
+                                        },
+
                                         onSaved = {
                                             writeViewModel.resetDraft()
-                                            navController.popBackStack(route = "main", inclusive = false)
+                                            navController.popBackStack(
+                                                route = "main",
+                                                inclusive = false
+                                            )
                                         },
-                                        onBack = { navController.popBackStack() },
+
+                                        onBack = {
+                                            writeViewModel.clearDraftOnly()
+
+                                            navController.navigate("block_selection") {
+                                                popUpTo("draft_preview") {
+                                                    inclusive = true
+                                                }
+                                                launchSingleTop = true
+                                            }
+                                        },
+
                                         modifier = Modifier.padding(innerPadding)
                                     )
                                 }
@@ -367,7 +392,11 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                                 composable("settings") {
-                                    SettingsScreen()
+                                    SettingsScreen(
+                                        onConfirm = {
+                                            navController.popBackStack()
+                                        }
+                                    )
                                 }
                             }
                         }

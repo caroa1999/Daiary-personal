@@ -1,16 +1,20 @@
 package com.smu.daiary.feature.settings
 
 import android.content.Context
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.delay
 
 
 data class MbtiOption(
@@ -19,7 +23,7 @@ data class MbtiOption(
 )
 
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(onConfirm: () -> Unit = {}) {
 
     val context = LocalContext.current
 
@@ -59,98 +63,169 @@ fun SettingsScreen() {
             ) ?: "INFP"
         )
     }
+    var showSavedMessage by remember {
+        mutableStateOf(false)
+    }
 
-    Column(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .padding(start = 24.dp,
-                    top = 48.dp,
-                    end = 24.dp,
-                    bottom = 24.dp)
+    Box(
+        modifier = Modifier.fillMaxSize()
     ) {
-
-        Text(
-            text = "MBTI 설정",
-            style =
-                MaterialTheme.typography.headlineMedium
-        )
-
-        Spacer(
-            Modifier.height(32.dp)
-        )
-
-        LazyVerticalGrid(
-            columns =
-                GridCells.Fixed(4)
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(
+                        start = 24.dp,
+                        top = 48.dp,
+                        end = 24.dp,
+                        bottom = 24.dp
+                    )
         ) {
 
-            items(mbtiList) { mbti ->
+            Text(
+                text = "MBTI 설정",
+                style =
+                    MaterialTheme.typography.headlineMedium
+            )
 
-                ElevatedCard(
-                    onClick = {
-                        selected = mbti.type
-                    },
-                    modifier =
-                        Modifier
+            Spacer(
+                Modifier.height(32.dp)
+            )
+
+            LazyVerticalGrid(
+                columns =
+                    GridCells.Fixed(4)
+            ) {
+
+                items(mbtiList) { mbti ->
+
+                    ElevatedCard(
+                        onClick = {
+                            selected = mbti.type
+                        },
+                        modifier = Modifier
                             .padding(8.dp)
-                            .fillMaxWidth(),
-                    colors =
-                        CardDefaults.elevatedCardColors(
+                            .fillMaxWidth()
+                            .graphicsLayer {
+                                val isSelected = selected == mbti.type
+                                scaleX = if (isSelected) 1.06f else 1f
+                                scaleY = if (isSelected) 1.06f else 1f
+                            }
+                            .border(
+                                width = if (selected == mbti.type) 2.dp else 0.dp,
+                                color = MaterialTheme.colorScheme.primary,
+                                shape = RoundedCornerShape(16.dp)
+                            ),
+                        colors = CardDefaults.elevatedCardColors(
                             containerColor =
                                 if (selected == mbti.type)
                                     MaterialTheme.colorScheme.primaryContainer
                                 else
                                     MaterialTheme.colorScheme.surface
                         )
-                ) {
-                    Column(
-                        modifier =
-                            Modifier.padding(12.dp),
-                        horizontalAlignment =
-                            Alignment.CenterHorizontally
                     ) {
-                        Text(
-                            text = mbti.type,
-                            style = MaterialTheme.typography.titleMedium
-                        )
+                        Column(
+                            modifier =
+                                Modifier.padding(12.dp),
+                            horizontalAlignment =
+                                Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text =
+                                    if (selected == mbti.type)
+                                        "✓ ${mbti.type}"
+                                    else
+                                        mbti.type,
 
-                        Spacer(
-                            Modifier.height(4.dp)
-                        )
+                                style =
+                                    MaterialTheme.typography.titleMedium,
 
-                        Text(
-                            text = mbti.keywords,
-                            style = MaterialTheme.typography.bodySmall
-                        )
+                                color =
+                                    if (selected == mbti.type)
+                                        MaterialTheme.colorScheme.primary
+                                    else
+                                        MaterialTheme.colorScheme.onSurface
+                            )
+
+
+                            Spacer(
+                                Modifier.height(4.dp)
+                            )
+
+                            Text(
+                                text = mbti.keywords,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
                     }
                 }
             }
-        }
 
-        Spacer(
-            Modifier.height(36.dp)
-        )
+            Spacer(
+                Modifier.height(36.dp)
+            )
 
-        Button(
-            onClick = {
+            Text(
+                text = "현재 스타일: $selected",
+                style =
+                    MaterialTheme.typography.titleMedium,
 
-                prefs.edit()
-                    .putString(
-                        "mbti",
-                        selected
+                modifier =
+                    Modifier.align(
+                        Alignment.CenterHorizontally
                     )
-                    .apply()
 
-            },
+            )
 
-            modifier =
-                Modifier.align(
-                    Alignment.CenterHorizontally
-                )
-        ) {
+            Spacer(
+                Modifier.height(16.dp)
+            )
 
-            Text("저장")
+            Button(
+                onClick = {
+
+                    prefs.edit()
+                        .putString(
+                            "mbti",
+                            selected
+                        )
+                        .apply()
+
+                    showSavedMessage = true
+                },
+
+                modifier =
+                    Modifier.align(
+                        Alignment.CenterHorizontally
+                    )
+            ) {
+
+                Text("저장")
+            }
+
+        }
+        if (showSavedMessage) {
+            AlertDialog(
+                onDismissRequest = {
+                    showSavedMessage = false
+                },
+                title = {
+                    Text("저장 완료")
+                },
+                text = {
+                    Text("MBTI가 저장되었습니다 ✓")
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showSavedMessage = false
+                            onConfirm()
+                        }
+                    ) {
+                        Text("확인")
+                    }
+                }
+            )
         }
     }
 }
