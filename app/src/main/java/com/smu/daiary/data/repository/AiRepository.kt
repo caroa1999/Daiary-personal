@@ -9,12 +9,14 @@ class AiRepository(
     suspend fun generateDraft(
         blocks: List<ContentBlock>,
         locale: String,
+        mbti: String,
         photoSummary: String? = null
     ): Result<String> =
         runCatching {
             dataSource.generateDiary(
                 blocks = blocks,
                 locale = locale,
+                mbti = mbti,
                 photoSummary = photoSummary
             )
         }

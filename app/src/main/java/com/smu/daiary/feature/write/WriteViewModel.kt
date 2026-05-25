@@ -340,10 +340,19 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
 
             Log.d(TAG, "📸 사진 분석 결과: $photoSummary")
 
+
+            val mbti = getApplication<Application>()
+                .getSharedPreferences(
+                    "user_settings",
+                    android.content.Context.MODE_PRIVATE
+                )
+                .getString("mbti", "INFP") ?: "INFP"
+
             val result =
                 aiRepository.generateDraft(
                     blocks = selected,
                     locale = locale,
+                    mbti = mbti,
                     photoSummary = photoSummary
                 )
             val content = result.getOrElse { fallbackTemplate(selected) }

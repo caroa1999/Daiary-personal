@@ -25,6 +25,7 @@ class AnthropicDataSource {
     suspend fun generateDiary(
         blocks: List<ContentBlock>,
         locale: String,
+        mbti: String,
         photoSummary: String? = null
     ): String =
         withContext(Dispatchers.IO) {
@@ -41,7 +42,11 @@ class AnthropicDataSource {
                 }
                 ?: ""
 
-            val prompt = buildPrompt(blocksText + photoText, locale)
+            val prompt = buildPrompt(
+                blocksText + photoText,
+                locale,
+                mbti
+            )
 
             val body = JSONObject().apply {
                 put("model", "claude-haiku-4-5-20251001")
@@ -74,11 +79,16 @@ class AnthropicDataSource {
                 .getString("text")
         }
 
-    private fun buildPrompt(blocksText: String, locale: String): String = if (locale == "en") {
+    private fun buildPrompt(
+        blocksText: String,
+        locale: String,
+        mbti: String
+    ): String =if (locale == "en") {
         """
 You are an AI that writes a warm, personal diary entry based on the user's daily data.
 
 Write a 3–5 paragraph diary in first person based on the data below.
+- Reflect MBTI personality: $mbti
 - Connect the data into a natural narrative, not a bullet list
 - Use plain text only, no markdown
 
@@ -89,6 +99,20 @@ $blocksText
         """
 당신은 사용자를 대신해 하루 일기를 쓰는 AI입니다.
 아래 데이터를 바탕으로 오늘 하루를 돌아보는 1인칭 일기를 작성해 주세요.
+사용자의 MBTI는 $mbti 입니다.
+
+MBTI 성향은 20~30% 정도만 반영하세요.
+성격을 과장하거나 고정관념처럼 표현하지 마세요.
+같은 사람이 다른 기분으로 쓴 일기처럼 자연스럽게 조절하세요.
+
+다음 요소에만 은은하게 반영하세요.
+- 사건을 해석하는 방식
+- 무엇에 주목하는지
+- 감정 표현 방식
+- 하루를 정리하는 방식
+- 미래를 바라보는 방식
+
+단, MBTI 이름 자체를 직접 언급하지 마세요.
 
 [작성 규칙]
 - 문체: 반말 일기체 (예: "~했다", "~이었다", "~인 것 같다")
