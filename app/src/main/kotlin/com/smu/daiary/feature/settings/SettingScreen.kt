@@ -1,6 +1,7 @@
 package com.smu.daiary.feature.settings
 
 import android.content.Context
+import android.content.Intent
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -201,6 +202,30 @@ fun SettingsScreen(onConfirm: () -> Unit = {}) {
             ) {
 
                 Text("저장")
+            }
+            Spacer(
+                Modifier.height(16.dp)
+            )
+
+            Button(
+                onClick = {
+
+                    context.startActivity(
+                        android.content.Intent(
+                            "android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"
+                        )
+                    )
+
+                },
+
+                modifier =
+                    Modifier.align(
+                        Alignment.CenterHorizontally
+                    )
+            ) {
+
+                Text("결제 알림 권한 설정")
+
             }
 
         }

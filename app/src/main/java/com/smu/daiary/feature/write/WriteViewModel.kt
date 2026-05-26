@@ -13,6 +13,7 @@ import com.smu.daiary.data.source.CalendarDataSource
 import com.smu.daiary.data.source.PhotoDataSource
 import com.smu.daiary.data.source.WeatherDataSource
 import com.smu.daiary.data.remote.ClaudeApi
+import com.smu.daiary.feature.write.PaymentSelectableItem
 import com.smu.daiary.R
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -73,6 +74,12 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
     val photos =
         _photos.asStateFlow()
 
+    private val _payments =
+        MutableStateFlow<List<PaymentSelectableItem>>(emptyList())
+
+    val payments =
+        _payments.asStateFlow()
+
     // 데이터 로딩 상태
     private val _isLoadingBlocks = MutableStateFlow(false)
     val isLoadingBlocks: StateFlow<Boolean> = _isLoadingBlocks.asStateFlow()
@@ -116,6 +123,7 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
             _isLoadingBlocks.value = true
             _blocks.value = emptyList()
             _photos.value = emptyList()
+            _payments.value = emptyList()
 
             val date = LocalDate.now().toString()
             val blocks = mutableListOf<ContentBlock>()
@@ -210,13 +218,46 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
             dailyDataRepository.getDailyData(userId, date)
                 .onSuccess { dailyData ->
                     val payments = dailyData?.payments ?: emptyList()
+
                     Log.d(TAG, "💳 결제 내역 로드 완료: ${payments.size}건")
-                    payments.forEachIndexed { i, payment ->
-                        blocks.add(ContentBlock(
-                            id = "payment_$i", type = BlockType.PAYMENT,
-                            content = "${payment.merchant} ${String.format("%,d", payment.amount)}원"
-                        ))
+
+                    if (payments.isNotEmpty()) {
+                        val timeFormatter =
+                            DateTimeFormatter.ofPattern("HH:mm")
+
+                        _payments.value =
+                            payments.mapIndexed { index, payment ->
+                                val timeText =
+                                    Instant.ofEpochMilli(payment.paidAt)
+                                        .atZone(ZoneId.systemDefault())
+                                        .format(timeFormatter)
+
+                                val category =
+                                    payment.category.ifBlank {
+                                        "기타"
+                                    }
+
+                                PaymentSelectableItem(
+                                    id = index,
+                                    displayText = "$timeText ${categoryEmoji(category)} ${payment.merchant} ${String.format("%,d", payment.amount)}원",
+                                    amount = payment.amount,
+                                    category = category,
+                                    isSelected = true
+                                )
+                            }
+
+                        blocks.add(
+                            ContentBlock(
+                                id = "payment_summary",
+                                type = BlockType.PAYMENT,
+                                content = buildPaymentSummary(_payments.value),
+                                isSelected = true
+                            )
+                        )
                     }
+                }
+                .onFailure {
+                    Log.w(TAG, "⚠️ 결제 내역 로드 실패", it)
                 }
                 .onFailure { Log.w(TAG, "⚠️ 결제 내역 로드 실패", it) }
 
@@ -267,6 +308,59 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun updatePaymentSelection(
+        selectedPayments: List<String>
+    ) {
+
+        _blocks.update { list ->
+
+            list.map { block ->
+
+                if (
+                    block.type ==
+                    BlockType.PAYMENT
+                ) {
+
+                    val lines =
+                        block.content
+                            .split("\n")
+
+                    val header =
+                        lines.first()
+
+                    val filtered =
+                        lines.drop(1)
+                            .filter {
+
+                                selectedPayments.any {
+                                        p ->
+                                    it.contains(p)
+                                }
+
+                            }
+
+                    block.copy(
+                        content =
+                            buildString {
+                                appendLine(header)
+                                filtered.forEach {
+                                    appendLine(it)
+                                }
+                            }
+                    )
+
+                }
+
+                else {
+                    block
+                }
+
+            }
+
+        }
+
+    }
+
     fun togglePhoto(uri: String) {
         _photos.update { list ->
             list.map { photo ->
@@ -278,6 +372,128 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+
+    fun addSelectablePhoto(uri: String) {
+        val alreadyExists =
+            _photos.value.any {
+                it.uri == uri
+            }
+
+        if (alreadyExists) return
+
+        _photos.update { list ->
+            list + PhotoSelectableItem(
+                uri = uri,
+                isSelected = true
+            )
+        }
+
+        syncPhotoBlockSelection()
+    }
+
+    fun togglePayment(
+        id: Int
+    ) {
+
+        _payments.update { list ->
+
+            list.map { payment ->
+
+                if (
+                    payment.id == id
+                ) {
+
+                    payment.copy(
+                        isSelected =
+                            !payment.isSelected
+                    )
+
+                }
+
+                else {
+                    payment
+                }
+
+            }
+
+        }
+
+        syncPaymentBlockSelection()
+
+    }
+
+    private fun syncPaymentBlockSelection() {
+
+        val selected =
+            _payments.value
+                .filter {
+                    it.isSelected
+                }
+
+        _blocks.update { list ->
+
+            list.map { block ->
+
+                if (
+                    block.type ==
+                    BlockType.PAYMENT
+                ) {
+
+                    block.copy(
+
+                        content =
+                            buildPaymentSummary(
+                                _payments.value
+                            ),
+
+                        isSelected =
+                            selected.isNotEmpty()
+
+                    )
+
+                }
+
+                else {
+                    block
+                }
+
+            }
+
+        }
+
+    }
+
+    private fun buildPaymentSummary(
+        payments: List<PaymentSelectableItem>
+    ): String {
+        val selected =
+            payments.filter { it.isSelected }
+
+        if (selected.isEmpty()) {
+            return "선택된 결제 내역이 없습니다"
+        }
+
+        val totalAmount =
+            selected.sumOf { it.amount }
+
+        val paymentLines =
+            selected.joinToString("\n") {
+                "- ${it.displayText}"
+            }
+
+        return "오늘 결제 ${selected.size}건 · 총 ${String.format("%,d", totalAmount)}원\n$paymentLines"
+    }
+
+    private fun categoryEmoji(category: String): String {
+        return when (category) {
+            "카페" -> "☕"
+            "편의점" -> "🛒"
+            "교통" -> "🚌"
+            "식사" -> "🍔"
+            else -> "💳"
+        }
+    }
+
 
     fun setAllPhotosSelected(selected: Boolean) {
         _photos.update { list ->

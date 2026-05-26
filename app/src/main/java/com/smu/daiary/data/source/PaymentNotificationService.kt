@@ -23,12 +23,21 @@ class PaymentNotificationService : NotificationListenerService() {
         val packageName = sbn.packageName
         val extras = sbn.notification?.extras ?: return
         val title = extras.getString("android.title") ?: ""
-        val text = extras.getString("android.text") ?: ""
+        val text =
+            extras.getCharSequence("android.text")?.toString()
+                ?: extras.getCharSequence("android.bigText")?.toString()
+                ?: ""
+
+        android.util.Log.d(
+            "PAYMENT",
+            "package=$packageName title=$title text=$text"
+        )
 
         // 지원하는 앱 패키지명 목록
         val supportedApps = mapOf(
-            "viva.republica.toss"   to ::parseToss,     // 토스
-            "com.kakaobank.channel" to ::parseKakaoBank  // 카카오뱅크 (확장 예정)
+            "viva.republica.toss"   to ::parseToss,
+            "com.kakaobank.channel" to ::parseKakaoBank,
+            "com.smu.daiary"        to ::parseTestPayment
         )
 
         val parser = supportedApps.entries
@@ -75,6 +84,11 @@ class PaymentNotificationService : NotificationListenerService() {
         return parseAmountAndMerchant(text)
     }
 
+    private fun parseTestPayment(title: String, text: String): PaymentData? {
+        if (!title.contains("결제") && !text.contains("원")) return null
+        return parseAmountAndMerchant(text)
+    }
+
     // 가맹점명, 금액 추출 공통 로직
     // 예시: "스타벅스 4,500원" → merchant: "스타벅스", amount: 4500
     private fun parseAmountAndMerchant(text: String): PaymentData? {
@@ -87,8 +101,47 @@ class PaymentNotificationService : NotificationListenerService() {
         return PaymentData(
             merchant = merchant,
             amount = amount,
-            paidAt = System.currentTimeMillis()
+            paidAt = System.currentTimeMillis(),
+            category = classifyPayment(merchant)
         )
+    }
+
+    private fun classifyPayment(
+        merchant: String
+    ): String {
+
+        return when {
+
+                    merchant.contains("스타벅스") ||
+                    merchant.contains("투썸") ||
+                    merchant.contains("메가커피") ||
+                    merchant.contains("컴포즈") ->
+
+                          "카페"
+
+                    merchant.contains("GS25") ||
+                    merchant.contains("CU") ||
+                    merchant.contains("세븐") ->
+
+                          "편의점"
+
+                    merchant.contains("버스") ||
+                    merchant.contains("지하철") ||
+                    merchant.contains("카카오T") ->
+
+                          "교통"
+
+                    merchant.contains("맥도날드") ||
+                    merchant.contains("버거킹") ||
+                    merchant.contains("롯데리아") ->
+
+                          "식사"
+
+            else ->
+                "기타"
+
+        }
+
     }
 
     // 현재 로그인된 userId 가져오기 (Firebase Auth)

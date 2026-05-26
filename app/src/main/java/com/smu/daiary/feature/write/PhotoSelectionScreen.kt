@@ -1,5 +1,8 @@
 package com.smu.daiary.feature.write
 
+
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -28,6 +31,21 @@ fun PhotoSelectionScreen(
 ) {
     val photos by viewModel.photos.collectAsStateWithLifecycle()
     val selectedCount = photos.count { it.isSelected }
+
+    val galleryLauncher =
+        rememberLauncherForActivityResult(
+            contract =
+                ActivityResultContracts.GetMultipleContents()
+        ) { uris: List<Uri> ->
+
+            uris.forEach { uri ->
+                viewModel.addSelectablePhoto(
+                    uri.toString()
+                )
+            }
+
+            viewModel.syncPhotoBlockSelection()
+        }
 
     Scaffold(
         topBar = {
@@ -73,7 +91,8 @@ fun PhotoSelectionScreen(
                         .padding(top = 16.dp, bottom = 8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
-                ) {
+                )
+                {
                     Text("사진 선택 $selectedCount/${photos.size}")
 
                     Row {
@@ -89,6 +108,20 @@ fun PhotoSelectionScreen(
                             Text("전체 해제")
                         }
                     }
+
+                }
+            }
+            item {
+                Button(
+                    onClick = {
+                        galleryLauncher.launch("image/*")
+                    },
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                ) {
+                    Text("갤러리에서 사진 추가")
                 }
             }
 

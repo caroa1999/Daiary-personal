@@ -89,6 +89,9 @@ fun BlockSelectionScreen(
     val selectedCount = blocks.count { it.isSelected }
 
     val photos by viewModel.photos.collectAsStateWithLifecycle()
+    val payments by
+    viewModel.payments
+        .collectAsStateWithLifecycle()
     val selectedPhotoCount = photos.count { it.isSelected }
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -239,11 +242,28 @@ fun BlockSelectionScreen(
                         onClick = {
                             if (block.type == BlockType.PHOTO) {
                                 onPhotoClick()
+                            } else if (block.type == BlockType.PAYMENT) {
+                                viewModel.toggleBlock(block.id)
                             } else {
                                 viewModel.toggleBlock(block.id)
                             }
                         }
                     )
+
+                    if (block.type == BlockType.PAYMENT && block.isSelected) {
+                        PaymentDetailSelector(
+                            payments = payments,
+
+                            onToggle = {
+                                    id ->
+
+                                viewModel.togglePayment(
+                                    id
+                                )
+                            }
+                        )
+                    }
+
                 }
                 }
             }
@@ -383,4 +403,141 @@ private fun BlockSelectionScreenPreview() {
             }
         }
     }
+}
+
+@Composable
+private fun PaymentDetailSelector(
+
+    payments:
+    List<PaymentSelectableItem>,
+
+    onToggle:
+        (Int) -> Unit
+
+) {
+
+    val isDark =
+        LocalDarkTheme.current
+
+    val wc =
+        if (isDark)
+            WriteColorsDark
+        else
+            WriteColors
+
+    if (
+        payments.isEmpty()
+    ) return
+
+    Surface(
+
+        shape =
+            RoundedCornerShape(
+                16.dp
+            ),
+
+        color =
+            wc.SurfaceBg,
+
+        border =
+            BorderStroke(
+                0.5.dp,
+                wc.Border
+            ),
+
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(
+                    start = 12.dp,
+                    end = 12.dp
+                )
+
+    ) {
+
+        Column(
+
+            modifier =
+                Modifier
+                    .padding(
+                        12.dp
+                    ),
+
+            verticalArrangement =
+                Arrangement
+                    .spacedBy(
+                        8.dp
+                    )
+
+        ) {
+
+            Text(
+
+                text =
+                    "결제 상세",
+
+                color =
+                    wc.TextMuted
+
+            )
+
+            payments.forEach { payment ->
+
+                Row(
+
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable {
+
+                                onToggle(payment.id)
+
+                            },
+
+                    horizontalArrangement =
+                        Arrangement
+                            .SpaceBetween,
+
+                    verticalAlignment =
+                        Alignment
+                            .CenterVertically
+
+                ) {
+
+                    Text(
+
+                        text =
+                            payment.displayText,
+
+                        modifier =
+                            Modifier
+                                .weight(
+                                    1f
+                                )
+
+                    )
+
+                    Checkbox(
+
+                        checked =
+                            payment.isSelected,
+
+                        onCheckedChange = {
+
+                            onToggle(
+                                payment.id
+                            )
+
+                        }
+
+                    )
+
+                }
+
+            }
+
+        }
+
+    }
+
 }
