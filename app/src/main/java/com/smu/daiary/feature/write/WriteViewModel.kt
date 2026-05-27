@@ -112,6 +112,7 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
 
     // 기존 일기 편집 시 원본 ID (null = 신규 작성)
     private val _existingEntryId = MutableStateFlow<String?>(null)
+    private var recentDiarySamples: String = ""
 
     /**
      * 실제 DataSource로부터 오늘 데이터를 수집하고
@@ -120,10 +121,13 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun loadBlocks(userId: String) {
         viewModelScope.launch {
+            loadRecentDiaryStyle(userId)
+
             _isLoadingBlocks.value = true
             _blocks.value = emptyList()
             _photos.value = emptyList()
             _payments.value = emptyList()
+
 
             val date = LocalDate.now().toString()
             val blocks = mutableListOf<ContentBlock>()
@@ -526,12 +530,31 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
 
     fun generateDraft() = viewModelScope.launch {
         val selected = _blocks.value.filter { it.isSelected }
-        if (selected.isEmpty()) return@launch
         val today = LocalDate.now().toString()
+
+        if (selected.isEmpty()) {
+            _draft.value = DiaryDraft(
+                date = today,
+                aiContent = "오늘 하루를 기록해보세요.",
+                editedContent = "오늘 하루를 기록해보세요.",
+                photos = emptyList()
+            )
+            return@launch
+        }
 
         viewModelScope.launch {
             _isGenerating.value = true
             _generateError.value = null
+
+            if (selected.isEmpty()) {
+                _draft.value = DiaryDraft(
+                    date = today,
+                    aiContent = "",
+                    editedContent = "",
+                    photos = emptyList()
+                )
+                return@launch
+            }
 
             val prefs = context.getSharedPreferences("daiary_settings", android.content.Context.MODE_PRIVATE)
             val locale = if (prefs.getString("language", "한국어") == "English") "en" else "ko"
@@ -569,7 +592,8 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
                     blocks = selected,
                     locale = locale,
                     mbti = mbti,
-                    photoSummary = photoSummary
+                    photoSummary = photoSummary,
+                    recentDiarySamples = recentDiarySamples
                 )
             val content = result.getOrElse { fallbackTemplate(selected) }
 
@@ -684,6 +708,33 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearDraftOnly() {
         _draft.value = null
+    }
+
+    fun loadRecentDiaryStyle(
+        userId: String
+    ) {
+
+        viewModelScope.launch {
+
+            diaryRepository
+                .getDiaries(userId)
+                .collect { diaries ->
+
+                    recentDiarySamples =
+                        diaries
+                            .take(2)
+                            .map {
+                                it.content
+                                    .takeLast(500)
+                            }
+                            .joinToString(
+                                "\n\n---\n\n"
+                            )
+
+                }
+
+        }
+
     }
 
     fun resetDraft() {

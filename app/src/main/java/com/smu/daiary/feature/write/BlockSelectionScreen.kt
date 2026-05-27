@@ -149,7 +149,7 @@ fun BlockSelectionScreen(
             Surface(color = wc.SurfaceBg, shadowElevation = 8.dp) {
                 Button(
                     onClick = { viewModel.generateDraft() },
-                    enabled = selectedCount > 0 && !isLoading && !isGenerating,
+                    enabled = !isLoading && !isGenerating,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 24.dp, vertical = 16.dp)

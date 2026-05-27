@@ -173,7 +173,7 @@ fun ProfileScreen(
     val prefs = remember { context.getSharedPreferences("user_settings", Context.MODE_PRIVATE) }
 
     var currentMbti by remember {
-        mutableStateOf(prefs.getString("mbti", "ENFJ") ?: "ENFJ")
+        mutableStateOf(prefs.getString("mbti", null))
     }
 
     var language by remember { mutableStateOf(prefs.getString("language", "한국어") ?: "한국어") }
@@ -187,7 +187,7 @@ fun ProfileScreen(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 paymentListenerEnabled = isNotificationListenerEnabled(context)
-                currentMbti = prefs.getString("mbti", "ENFJ") ?: "ENFJ"
+                currentMbti = prefs.getString("mbti", null)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -333,7 +333,7 @@ fun ProfileScreen(
                 Column {
                     ArrowRow(
                         label = "AI 작성 스타일",
-                        value = currentMbti,
+                        value = currentMbti ?: "사용자 문체 기반",
                         onClick = {
                             navController.navigate("settings")
                         }

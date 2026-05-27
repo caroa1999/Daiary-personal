@@ -10,14 +10,16 @@ class AiRepository(
         blocks: List<ContentBlock>,
         locale: String,
         mbti: String,
-        photoSummary: String? = null
+        photoSummary: String? = null,
+        recentDiarySamples: String = ""
     ): Result<String> =
         runCatching {
             dataSource.generateDiary(
                 blocks = blocks,
                 locale = locale,
                 mbti = mbti,
-                photoSummary = photoSummary
+                photoSummary = photoSummary,
+                recentDiarySamples = recentDiarySamples
             )
         }
 }

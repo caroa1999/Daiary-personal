@@ -26,7 +26,8 @@ class AnthropicDataSource {
         blocks: List<ContentBlock>,
         locale: String,
         mbti: String,
-        photoSummary: String? = null
+        photoSummary: String? = null,
+        recentDiarySamples: String = ""
     ): String =
         withContext(Dispatchers.IO) {
             val blocksText = blocks.joinToString("\n") { "- [${it.type.label}] ${it.content}" }
@@ -43,9 +44,10 @@ class AnthropicDataSource {
                 ?: ""
 
             val prompt = buildPrompt(
-                blocksText + photoText,
-                locale,
-                mbti
+                blocksText = blocksText + photoText,
+                locale = locale,
+                mbti = mbti,
+                recentDiarySamples = recentDiarySamples
             )
 
             val body = JSONObject().apply {
@@ -82,8 +84,9 @@ class AnthropicDataSource {
     private fun buildPrompt(
         blocksText: String,
         locale: String,
-        mbti: String
-    ): String =if (locale == "en") {
+        mbti: String,
+        recentDiarySamples: String = ""
+    ): String = if (locale == "en") {
         """
 You are an AI that writes a warm, personal diary entry based on the user's daily data.
 
@@ -91,6 +94,16 @@ Write a 3–5 paragraph diary in first person based on the data below.
 - Reflect MBTI personality: $mbti
 - Connect the data into a natural narrative, not a bullet list
 - Use plain text only, no markdown
+
+${if (recentDiarySamples.isNotBlank()) """
+        [User writing style samples]
+        The following are recent diary entries written by the user .
+        Do not copy events or phrases .
+        Only refer to sentence length, emotional tone, reflection style, and wording habits.
+        If the samples have different styles, prioritize the most recent one.
+
+        $recentDiarySamples
+        """ else ""}
 
 [Data]
 $blocksText
@@ -116,12 +129,18 @@ MBTI 성향은 20~30% 정도만 반영하세요.
 
 [작성 규칙]
 - 문체: 반말 일기체 (예: "~했다", "~이었다", "~인 것 같다")
-- 분량: 3~5 문단
+- 분량: 사용자 평균 분량 우선 (없으면 5~8문장)
 - 첫 문장: 오늘의 날씨나 기분으로 하루를 여는 문장으로 시작
 - 중간 문단: 하루의 흐름(아침→낮→저녁) 순서로 사건과 그때의 감정, 생각을 연결
 - 마지막 문단: 오늘 하루를 돌아보며 느낀 점이나 내일에 대한 짧은 생각으로 마무리
 - 단순한 사실 나열 금지 — 그 순간 어떤 감정이었는지 내면을 담을 것
 - 마크다운 없이 순수 텍스트로만 작성
+- 사용자의 기존 평균 문장 수를 넘기지 말 것
+- 최근 일기가 짧으면 생성 결과도 짧게 유지
+- 감정 해석이나 교훈을 추가하지 말 것
+- 문장을 늘리기 위해 배경 설명을 만들지 말 것
+- 하루를 평가하거나 교훈을 내리지 말 것
+- 사용자가 쓰지 않은 감정 해석을 추가하지 말 것
 
 [결제 데이터 해석 규칙]
 - 결제 정보는 하루 행동을 추론하는 참고 데이터로 사용
@@ -140,6 +159,34 @@ MBTI 성향은 20~30% 정도만 반영하세요.
 - 결제 데이터는 하루의 보조 정보이며 사진·날씨·일정보다 우선하지 말 것
 - 이동, 식사, 구매는 필요한 경우에만 언급
 - 반복된 이동이나 소비를 그대로 나열하지 말 것
+
+${if (recentDiarySamples.isNotBlank()) """
+        [사용자 기존 일기 문체 참고]
+
+        아래는 사용자가 최근 작성한 일기입니다.내용이나 사건을 복사하지 말고
+                다음 요소만 우선 모방하세요 .
+
+        -문장 길이
+                -문단 수
+                -감정 표현 강도
+        -종결 어미
+                -생각 전개 방식
+
+        사용자 평균 문장 길이의
+                1.5 배 이상 길어지지 마세요.새로운 비유, 철학적 해석,
+        과도한 감정 묘사를 추가하지 마세요.사용자 문체가 짧으면 짧게,
+        담백하면 담백하게 유지하세요.최근 일기를 가장 우선 참고하세요.
+
+        $recentDiarySamples
+        """ else ""}
+
+${if (recentDiarySamples.isNotBlank()) """
+        [사용자 기존 일기 문체 참고]
+        아래는 사용자가 최근 작성한 일기입니다.내용이나 사건을 복사하지 말고, 문장 길이, 감정 표현 정도, 회고 방식, 말투만 참고하세요.
+        여러 일기의 스타일이 다르면 가장 최근 일기를 우선 참고하세요.
+
+        $recentDiarySamples
+        """ else ""}
 
 [오늘의 데이터]
 $blocksText

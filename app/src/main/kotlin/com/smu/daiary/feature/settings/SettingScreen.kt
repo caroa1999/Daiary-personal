@@ -57,11 +57,11 @@ fun SettingsScreen(onConfirm: () -> Unit = {}) {
     )
 
     var selected by remember {
-        mutableStateOf(
+        mutableStateOf<String?>(
             prefs.getString(
                 "mbti",
                 "INFP"
-            ) ?: "INFP"
+            )
         )
     }
     var showSavedMessage by remember {
@@ -102,7 +102,11 @@ fun SettingsScreen(onConfirm: () -> Unit = {}) {
 
                     ElevatedCard(
                         onClick = {
-                            selected = mbti.type
+                            selected =
+                                if (selected == mbti.type)
+                                    null
+                                else
+                                    mbti.type
                         },
                         modifier = Modifier
                             .padding(8.dp)
@@ -166,16 +170,12 @@ fun SettingsScreen(onConfirm: () -> Unit = {}) {
                 Modifier.height(36.dp)
             )
 
+            val currentStyleText = selected ?: "사용자 문체 기반"
+
             Text(
-                text = "현재 스타일: $selected",
-                style =
-                    MaterialTheme.typography.titleMedium,
-
-                modifier =
-                    Modifier.align(
-                        Alignment.CenterHorizontally
-                    )
-
+                text = "현재 스타일: $currentStyleText",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
             )
 
             Spacer(
@@ -185,12 +185,14 @@ fun SettingsScreen(onConfirm: () -> Unit = {}) {
             Button(
                 onClick = {
 
-                    prefs.edit()
-                        .putString(
-                            "mbti",
-                            selected
-                        )
-                        .apply()
+                    prefs.edit().apply {
+                        if (selected == null)
+                            remove("mbti")
+                        else
+                            putString("mbti", selected)
+
+                        apply()
+                    }
 
                     showSavedMessage = true
                 },
@@ -202,30 +204,6 @@ fun SettingsScreen(onConfirm: () -> Unit = {}) {
             ) {
 
                 Text("저장")
-            }
-            Spacer(
-                Modifier.height(16.dp)
-            )
-
-            Button(
-                onClick = {
-
-                    context.startActivity(
-                        android.content.Intent(
-                            "android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"
-                        )
-                    )
-
-                },
-
-                modifier =
-                    Modifier.align(
-                        Alignment.CenterHorizontally
-                    )
-            ) {
-
-                Text("결제 알림 권한 설정")
-
             }
 
         }
