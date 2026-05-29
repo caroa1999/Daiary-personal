@@ -1,5 +1,7 @@
 package com.smu.daiary.feature.auth
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
@@ -68,6 +70,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.core.os.LocaleListCompat
+import androidx.core.app.NotificationCompat
+import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -96,6 +100,40 @@ private fun isNotificationListenerEnabled(context: Context): Boolean {
     return flat?.contains(context.packageName) == true
 }
 
+private fun showTestPaymentNotification(
+    context: Context,
+    merchant: String,
+    amount: Int
+) {
+    val channelId = "test_payment_channel"
+
+    val manager =
+        context.getSystemService(Context.NOTIFICATION_SERVICE)
+                as NotificationManager
+
+    val channel =
+        NotificationChannel(
+            channelId,
+            "테스트 결제 알림",
+            NotificationManager.IMPORTANCE_HIGH
+        )
+
+    manager.createNotificationChannel(channel)
+
+    val notification =
+        NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("[테스트 결제]")
+            .setContentText("$merchant ${String.format("%,d", amount)}원 결제")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .build()
+
+    manager.notify(
+        System.currentTimeMillis().toInt(),
+        notification
+    )
+}
+
 private object ProfileColors {
     val Bg = Ivory
     val CardBg = White
@@ -111,6 +149,7 @@ private object ProfileColors {
 @Composable
 fun ProfileScreen(
     authViewModel: AuthViewModel,
+    navController: NavController,
     onBack: () -> Unit,
     isDarkMode: Boolean,
     onDarkModeChange: (Boolean) -> Unit,
@@ -131,7 +170,11 @@ fun ProfileScreen(
 
     val currentUser = FirebaseAuth.getInstance().currentUser
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("daiary_settings", Context.MODE_PRIVATE) }
+    val prefs = remember { context.getSharedPreferences("user_settings", Context.MODE_PRIVATE) }
+
+    var currentMbti by remember {
+        mutableStateOf(prefs.getString("mbti", null))
+    }
 
     var language by remember { mutableStateOf(prefs.getString("language", "한국어") ?: "한국어") }
     var notificationEnabled by remember { mutableStateOf(prefs.getBoolean("notification_enabled", true)) }
@@ -144,6 +187,7 @@ fun ProfileScreen(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 paymentListenerEnabled = isNotificationListenerEnabled(context)
+                currentMbti = prefs.getString("mbti", null)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -278,6 +322,7 @@ fun ProfileScreen(
                                 fontWeight = FontWeight.Medium
                             )
                         }
+
                     }
                 }
             }
@@ -286,6 +331,16 @@ fun ProfileScreen(
             ProfileSectionLabel(stringResource(R.string.section_app_settings))
             ProfileCard {
                 Column {
+                    ArrowRow(
+                        label = "AI 작성 스타일",
+                        value = currentMbti ?: "사용자 문체 기반",
+                        onClick = {
+                            navController.navigate("settings")
+                        }
+                    )
+
+                    ProfileDivider()
+
                     SwitchRow(
                         label = stringResource(R.string.setting_dark_mode),
                         checked = isDarkMode,
@@ -322,6 +377,79 @@ fun ProfileScreen(
                             onClick = { showTimePickerDialog = true }
                         )
                     }
+                    ProfileDivider()
+
+                    ArrowRow(
+                        label = "결제 알림 수집",
+                        value =
+                            if (paymentListenerEnabled)
+                                "연결됨"
+                            else
+                                "설정 필요",
+
+                        onClick = {
+                            context.startActivity(
+                                Intent(
+                                    Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS
+                                )
+                            )
+                        }
+                    )
+                    ProfileDivider()
+
+                    ArrowRow(
+                        label = "테스트 결제: 스타벅스",
+                        value = "5,800원",
+                        onClick = {
+                            showTestPaymentNotification(
+                                context = context,
+                                merchant = "스타벅스",
+                                amount = 5800
+                            )
+                        }
+                    )
+
+                    ProfileDivider()
+
+                    ArrowRow(
+                        label = "테스트 결제: GS25",
+                        value = "4,200원",
+                        onClick = {
+                            showTestPaymentNotification(
+                                context = context,
+                                merchant = "GS25",
+                                amount = 4200
+                            )
+                        }
+                    )
+
+                    ProfileDivider()
+
+                    ArrowRow(
+                        label = "테스트 결제: 버스",
+                        value = "1,500원",
+                        onClick = {
+                            showTestPaymentNotification(
+                                context = context,
+                                merchant = "버스",
+                                amount = 1500
+                            )
+                        }
+                    )
+
+                    ProfileDivider()
+
+                    ArrowRow(
+                        label = "테스트 결제: 맥도날드",
+                        value = "8,900원",
+                        onClick = {
+                            showTestPaymentNotification(
+                                context = context,
+                                merchant = "맥도날드",
+                                amount = 8900
+                            )
+                        }
+                    )
                 }
             }
 

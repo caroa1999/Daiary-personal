@@ -54,10 +54,12 @@ import com.smu.daiary.feature.auth.TermsOfServiceScreen
 import com.smu.daiary.feature.home.HomeScreen
 import com.smu.daiary.feature.home.HomeViewModel
 import com.smu.daiary.feature.notification.createNotificationChannel
+import com.smu.daiary.feature.settings.SettingsScreen
 import com.smu.daiary.feature.write.BlockSelectionScreen
 import com.smu.daiary.feature.write.DiaryDetailScreen
 import com.smu.daiary.feature.write.DiaryEditScreen
 import com.smu.daiary.feature.write.DraftPreviewScreen
+import com.smu.daiary.feature.write.PhotoSelectionScreen
 import com.smu.daiary.feature.write.WriteViewModel
 import com.smu.daiary.ui.theme.DaiaryTheme
 import java.util.Locale
@@ -249,23 +251,59 @@ class MainActivity : ComponentActivity() {
                                 composable("block_selection") {
                                     BlockSelectionScreen(
                                         viewModel = writeViewModel,
-                                        onNext = { navController.navigate("draft_preview") },
+                                        onNext = {
+                                            navController.navigate("draft_preview") {
+                                                popUpTo("block_selection") {
+                                                    inclusive = false
+                                                }
+                                                launchSingleTop = true
+                                            }
+                                        },
                                         onBack = { navController.popBackStack() },
+                                        onPhotoClick = {
+                                            navController.navigate("photo_selection")
+                                        },
                                         onRetry = { writeViewModel.loadBlocks(userId) },
                                         modifier = Modifier.padding(innerPadding)
                                     )
                                 }
+                                composable("photo_selection") {
+                                    PhotoSelectionScreen(
+                                        viewModel = writeViewModel,
+                                        onBack = { navController.popBackStack() },
+                                        modifier = Modifier.padding(innerPadding)
+                                    )
+                                }
+
                                 // "draft_preview": 초안 미리보기 화면
                                 composable("draft_preview") {
                                     DraftPreviewScreen(
                                         viewModel = writeViewModel,
                                         userId = userId,
-                                        onEdit = { navController.navigate("diary_edit") },
+
+                                        onEdit = {
+                                            navController.navigate("diary_edit")
+                                        },
+
                                         onSaved = {
                                             writeViewModel.resetDraft()
-                                            navController.popBackStack(route = "main", inclusive = false)
+                                            navController.popBackStack(
+                                                route = "main",
+                                                inclusive = false
+                                            )
                                         },
-                                        onBack = { navController.popBackStack() },
+
+                                        onBack = {
+                                            writeViewModel.clearDraftOnly()
+
+                                            navController.navigate("block_selection") {
+                                                popUpTo("draft_preview") {
+                                                    inclusive = true
+                                                }
+                                                launchSingleTop = true
+                                            }
+                                        },
+
                                         modifier = Modifier.padding(innerPadding)
                                     )
                                 }
@@ -307,6 +345,7 @@ class MainActivity : ComponentActivity() {
                                         onPrivacyPolicy = { navController.navigate("privacy_policy") },
                                         onTermsOfService = { navController.navigate("terms_of_service") },
                                         onEditProfile = { navController.navigate("profile_edit") },
+                                        navController = navController,
                                         modifier = Modifier.padding(innerPadding)
                                     )
                                 }
@@ -351,6 +390,13 @@ class MainActivity : ComponentActivity() {
                                             modifier = Modifier.padding(innerPadding)
                                         )
                                     }
+                                }
+                                composable("settings") {
+                                    SettingsScreen(
+                                        onConfirm = {
+                                            navController.popBackStack()
+                                        }
+                                    )
                                 }
                             }
                         }

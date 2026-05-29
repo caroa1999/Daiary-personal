@@ -1,7 +1,10 @@
 package com.smu.daiary.feature.write
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,19 +48,24 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.material.icons.outlined.BrokenImage
-import coil.compose.AsyncImage
-import coil.compose.AsyncImagePainter
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import android.util.Log
+import coil.compose.AsyncImage
 import com.smu.daiary.R
 import com.smu.daiary.ui.theme.DaiaryTheme
 import com.smu.daiary.ui.theme.LocalDarkTheme
@@ -105,7 +113,19 @@ fun DraftPreviewScreen(
     val isSaving by viewModel.isSaving.collectAsStateWithLifecycle()
     val selectedWeather by viewModel.selectedWeather.collectAsStateWithLifecycle()
     val selectedEmotion by viewModel.selectedEmotion.collectAsStateWithLifecycle()
+    val photos by viewModel.photos.collectAsStateWithLifecycle()
+    val selectedPhotos = photos.filter { it.isSelected }
     val displayText = draft?.editedContent ?: draft?.aiContent ?: ""
+    var selectedImageUri by remember { mutableStateOf<String?>(null) }
+
+
+    BackHandler {
+        if (selectedImageUri != null) {
+            selectedImageUri = null
+        } else {
+            onBack()
+        }
+    }
 
     Scaffold(
         modifier = modifier,
@@ -227,6 +247,8 @@ fun DraftPreviewScreen(
             }
 
             val photos = draft?.photos.orEmpty()
+            Log.d("PHOTO_DEBUG", "photos count = ${photos.size}")
+            Log.d("PHOTO_DEBUG", "photos = $photos")
             if (photos.isNotEmpty()) {
                 Text(
                     text = stringResource(R.string.attached_photos),
@@ -238,40 +260,54 @@ fun DraftPreviewScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    items(photos) { uri ->
+                    items(photos) { photo ->
                         Box(
                             modifier = Modifier
                                 .size(80.dp)
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(wc.PurpleLight),
-                            contentAlignment = Alignment.Center
+                                .background(wc.PurpleLight)
+                                .clickable { selectedImageUri = photo }
                         ) {
-                            var imageState = remember { mutableStateOf<AsyncImagePainter.State>(AsyncImagePainter.State.Empty) }
                             AsyncImage(
-                                model = uri,
+                                model = photo,
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize(),
-                                onState = { imageState.value = it }
+                                modifier = Modifier.fillMaxSize()
                             )
-                            if (imageState.value is AsyncImagePainter.State.Loading) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    color = wc.Purple,
-                                    strokeWidth = 2.dp
-                                )
-                            }
-                            if (imageState.value is AsyncImagePainter.State.Error) {
-                                Icon(
-                                    imageVector = Icons.Outlined.BrokenImage,
-                                    contentDescription = stringResource(R.string.photo_load_error),
-                                    tint = wc.TextMuted,
-                                    modifier = Modifier.size(32.dp)
-                                )
-                            }
                         }
                     }
                 }
+            }
+        }
+    }
+    if (selectedImageUri != null) {
+        var scale by remember(selectedImageUri) { mutableFloatStateOf(1f) }
+
+        Dialog(
+            onDismissRequest = { selectedImageUri = null }
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable { selectedImageUri = null },
+                contentAlignment = Alignment.Center
+            ) {
+                AsyncImage(
+                    model = selectedImageUri,
+                    contentDescription = "확대 사진",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .pointerInput(selectedImageUri) {
+                            detectTransformGestures { _, _, zoom, _ ->
+                                scale = (scale * zoom).coerceIn(1f, 5f)
+                            }
+                        }
+                        .graphicsLayer(
+                            scaleX = scale,
+                            scaleY = scale,
+                        )
+                )
             }
         }
     }

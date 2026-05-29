@@ -6,6 +6,20 @@ import com.smu.daiary.feature.write.ContentBlock
 class AiRepository(
     private val dataSource: AnthropicDataSource = AnthropicDataSource()
 ) {
-    suspend fun generateDraft(blocks: List<ContentBlock>, locale: String): Result<String> =
-        runCatching { dataSource.generateDiary(blocks, locale) }
+    suspend fun generateDraft(
+        blocks: List<ContentBlock>,
+        locale: String,
+        mbti: String,
+        photoSummary: String? = null,
+        recentDiarySamples: String = ""
+    ): Result<String> =
+        runCatching {
+            dataSource.generateDiary(
+                blocks = blocks,
+                locale = locale,
+                mbti = mbti,
+                photoSummary = photoSummary,
+                recentDiarySamples = recentDiarySamples
+            )
+        }
 }

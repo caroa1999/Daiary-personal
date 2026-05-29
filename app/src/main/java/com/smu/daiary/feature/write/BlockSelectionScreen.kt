@@ -43,6 +43,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -58,9 +60,17 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.outlined.Nightlight
 import com.smu.daiary.R
 import com.smu.daiary.ui.theme.DaiaryTheme
 import com.smu.daiary.ui.theme.LocalDarkTheme
+import com.smu.daiary.util.DiaryDateUtil
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,6 +78,7 @@ fun BlockSelectionScreen(
     viewModel: WriteViewModel,
     onNext: () -> Unit,
     onBack: () -> Unit,
+    onPhotoClick: () -> Unit,
     onRetry: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -81,11 +92,28 @@ fun BlockSelectionScreen(
     val draft by viewModel.draft.collectAsStateWithLifecycle()
     val selectedCount = blocks.count { it.isSelected }
 
+    val photos by viewModel.photos.collectAsStateWithLifecycle()
+    val payments by
+    viewModel.payments
+        .collectAsStateWithLifecycle()
+    val selectedPhotoCount = photos.count { it.isSelected }
+
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // 자정~오전 4시 사이 여부 및 일기 기준 날짜
+    val isLateNight = remember { DiaryDateUtil.isLateNight() }
+    val diaryDate = remember { DiaryDateUtil.diaryDate() }
+
     // AI 초안 생성 완료 → 다음 화면 자동 전환
+    var hasNavigatedToPreview by remember {
+        mutableStateOf(false)
+    }
+
     LaunchedEffect(draft) {
-        if (draft != null) onNext()
+        if (draft != null && !hasNavigatedToPreview) {
+            hasNavigatedToPreview = true
+            onNext()
+        }
     }
 
     // 생성 오류 → 스낵바 표시
@@ -129,7 +157,7 @@ fun BlockSelectionScreen(
             Surface(color = wc.SurfaceBg, shadowElevation = 8.dp) {
                 Button(
                     onClick = { viewModel.generateDraft() },
-                    enabled = selectedCount > 0 && !isLoading && !isGenerating,
+                    enabled = !isLoading && !isGenerating,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 24.dp, vertical = 16.dp)
@@ -215,17 +243,50 @@ fun BlockSelectionScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                // 자정~오전 4시 사이에만 "어제 일기 작성 중" 배너 표시
+                if (isLateNight) {
+                    item {
+                        LateNightDiaryBanner(
+                            diaryDate = diaryDate,
+                            isDark = isDark
+                        )
+                    }
+                }
                 items(blocks) { block ->
                     BlockItem(
                         block = block,
                         enabled = !isGenerating,
-                        onClick = { viewModel.toggleBlock(block.id) }
+                        onClick = {
+                            if (block.type == BlockType.PHOTO) {
+                                onPhotoClick()
+                            } else if (block.type == BlockType.PAYMENT) {
+                                viewModel.toggleBlock(block.id)
+                            } else {
+                                viewModel.toggleBlock(block.id)
+                            }
+                        }
                     )
+
+                    if (block.type == BlockType.PAYMENT && block.isSelected) {
+                        PaymentDetailSelector(
+                            payments = payments,
+
+                            onToggle = {
+                                    id ->
+
+                                viewModel.togglePayment(
+                                    id
+                                )
+                            }
+                        )
+                    }
+
+                }
                 }
             }
         }
     }
-}
+
 
 @Composable
 private fun BlockItem(block: ContentBlock, enabled: Boolean = true, onClick: () -> Unit) {
@@ -292,6 +353,7 @@ private fun BlockItem(block: ContentBlock, enabled: Boolean = true, onClick: () 
     }
 }
 
+
 private fun blockTypeIcon(type: BlockType): ImageVector = when (type) {
     BlockType.PAYMENT  -> Icons.Outlined.CreditCard
     BlockType.PHOTO    -> Icons.Outlined.PhotoCamera
@@ -355,6 +417,191 @@ private fun BlockSelectionScreenPreview() {
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 items(sampleBlocks) { block -> BlockItem(block = block, onClick = {}) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PaymentDetailSelector(
+
+    payments:
+    List<PaymentSelectableItem>,
+
+    onToggle:
+        (Int) -> Unit
+
+) {
+
+    val isDark =
+        LocalDarkTheme.current
+
+    val wc =
+        if (isDark)
+            WriteColorsDark
+        else
+            WriteColors
+
+    if (
+        payments.isEmpty()
+    ) return
+
+    Surface(
+
+        shape =
+            RoundedCornerShape(
+                16.dp
+            ),
+
+        color =
+            wc.SurfaceBg,
+
+        border =
+            BorderStroke(
+                0.5.dp,
+                wc.Border
+            ),
+
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(
+                    start = 12.dp,
+                    end = 12.dp
+                )
+
+    ) {
+
+        Column(
+
+            modifier =
+                Modifier
+                    .padding(
+                        12.dp
+                    ),
+
+            verticalArrangement =
+                Arrangement
+                    .spacedBy(
+                        8.dp
+                    )
+
+        ) {
+
+            Text(
+
+                text =
+                    "결제 상세",
+
+                color =
+                    wc.TextMuted
+
+            )
+
+            payments.forEach { payment ->
+
+                Row(
+
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable {
+
+                                onToggle(payment.id)
+
+                            },
+
+                    horizontalArrangement =
+                        Arrangement
+                            .SpaceBetween,
+
+                    verticalAlignment =
+                        Alignment
+                            .CenterVertically
+
+                ) {
+
+                    Text(
+
+                        text =
+                            payment.displayText,
+
+                        modifier =
+                            Modifier
+                                .weight(
+                                    1f
+                                )
+
+                    )
+
+                    Checkbox(
+
+                        checked =
+                            payment.isSelected,
+
+                        onCheckedChange = {
+
+                            onToggle(
+                                payment.id
+                            )
+
+                        }
+
+                    )
+
+                }
+
+            }
+
+        }
+
+    }
+
+}
+
+/**
+ * 자정~오전 4시 사이에만 표시되는 날짜 안내 배너.
+ * 사용자가 어제 날짜의 일기를 작성 중임을 부드럽게 알려준다.
+ */
+@Composable
+private fun LateNightDiaryBanner(
+    diaryDate: java.time.LocalDate,
+    isDark: Boolean
+) {
+    val formatter = DateTimeFormatter.ofPattern("M월 d일", Locale.KOREAN)
+    val dateText = diaryDate.format(formatter)
+
+    val bgColor = if (isDark) Color(0xFF2A2440) else Color(0xFFF0EEFF)
+    val textColor = if (isDark) Color(0xFFB8AEFF) else Color(0xFF6B5CE7)
+
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = bgColor,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Nightlight,
+                contentDescription = null,
+                tint = textColor,
+                modifier = Modifier.size(18.dp)
+            )
+            Column {
+                Text(
+                    text = "$dateText 일기를 작성하고 있어요",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = textColor
+                )
+                Text(
+                    text = "자정이 넘었지만 오전 4시까지는 어제 일기로 저장돼요",
+                    fontSize = 11.sp,
+                    color = textColor.copy(alpha = 0.7f)
+                )
             }
         }
     }

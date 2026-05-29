@@ -62,6 +62,7 @@ import com.smu.daiary.data.model.DiaryEntry
 import com.smu.daiary.ui.theme.DaiaryTheme
 import com.smu.daiary.ui.theme.LocalDarkTheme
 import java.time.LocalDate
+import androidx.compose.ui.window.Dialog
 
 private val weatherIcons: Map<String, ImageVector> = mapOf(
     "맑음" to Icons.Outlined.WbSunny,
@@ -100,6 +101,8 @@ fun DiaryDetailScreen(
 ) {
     val isDark = LocalDarkTheme.current
     val wc = if (isDark) WriteColorsDark else WriteColors
+
+    var selectedImageUri by remember { mutableStateOf<String?>(null) }
 
     var showDeleteDialog by remember { mutableStateOf(false) }
 
@@ -235,28 +238,38 @@ fun DiaryDetailScreen(
                                 .background(wc.PurpleLight),
                             contentAlignment = Alignment.Center
                         ) {
-                            var imageState = remember { mutableStateOf<AsyncImagePainter.State>(AsyncImagePainter.State.Empty) }
-                            AsyncImage(
-                                model = uri,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize(),
-                                onState = { imageState.value = it }
-                            )
-                            if (imageState.value is AsyncImagePainter.State.Loading) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    color = wc.Purple,
-                                    strokeWidth = 2.dp
+                            Surface(
+                                onClick = { selectedImageUri = uri },
+                                modifier = Modifier.size(80.dp),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                var imageState by remember { mutableStateOf<AsyncImagePainter.State?>(null) }
+
+                                AsyncImage(
+                                    model = uri,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize(),
+                                    onState = { imageState = it }
                                 )
-                            }
-                            if (imageState.value is AsyncImagePainter.State.Error) {
-                                Icon(
-                                    imageVector = Icons.Outlined.BrokenImage,
-                                    contentDescription = stringResource(R.string.photo_load_error),
-                                    tint = wc.TextMuted,
-                                    modifier = Modifier.size(32.dp)
-                                )
+
+                                if (imageState is AsyncImagePainter.State.Loading) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(24.dp),
+                                        color = wc.Purple,
+                                        strokeWidth = 2.dp
+                                    )
+                                }
+
+
+                                if (imageState is AsyncImagePainter.State.Error) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.BrokenImage,
+                                        contentDescription = null,
+                                        tint = wc.TextMuted,
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -279,6 +292,28 @@ fun DiaryDetailScreen(
             )
         }
     }
+
+        if (selectedImageUri != null) {
+            Dialog(
+                onDismissRequest = { selectedImageUri = null }
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.White)
+                        .padding(12.dp)
+                ) {
+                    AsyncImage(
+                        model = selectedImageUri,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(20.dp)),
+                        contentScale = ContentScale.Fit
+                    )
+                }
+            }
+        }
     } // Box
 }
 
