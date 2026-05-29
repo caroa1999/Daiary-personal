@@ -35,17 +35,34 @@ import java.util.Locale
 import android.net.Uri
 import android.util.Base64
 import java.io.ByteArrayOutputStream
+import com.smu.daiary.util.DiaryDateUtil
 
 
 private const val TAG = "WriteViewModel"
 
+/**
+ * 일기 작성 화면 전체의 상태와 비즈니스 로직을 담당하는 ViewModel.
+ *
+ * 주요 책임:
+ * 1. 오늘 데이터 수집 — 날씨·캘린더·사진·결제를 병렬로 수집해 ContentBlock 목록 구성
+ * 2. 블록/사진/결제 선택 상태 관리 — 사용자가 AI에 넘길 데이터를 취사선택
+ * 3. AI 초안 생성 — 선택된 블록 + MBTI + 사진 분석 결과 + 최근 문체 샘플을 Claude API에 전달
+ * 4. 초안 편집 & Firestore 저장 — 사용자가 수정한 내용을 DiaryEntry로 변환해 저장
+ * 5. 기존 일기 편집 지원 — 홈에서 넘어온 DiaryEntry를 draft로 복원
+ */
 class WriteViewModel(application: Application) : AndroidViewModel(application) {
 
     private val context = application.applicationContext
 
-    // SharedPreferences 언어 설정("한국어"/"English")에 맞는 로케일 Context를 반환.
-    // Application context는 MainActivity.attachBaseContext의 로케일 재설정 영향을 받지
-    // 않으므로, 매번 직접 Configuration을 덮어써야 한다.
+    // ─────────────────────────────────────────────────────────────
+    // 내부 유틸
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * SharedPreferences 언어 설정("한국어"/"English")에 맞는 로케일 Context를 반환.
+     * Application context는 MainActivity.attachBaseContext의 로케일 재설정 영향을 받지
+     * 않으므로, 매번 직접 Configuration을 덮어써야 한다.
+     */
     private fun localizedContext(): Context {
         val prefs = context.getSharedPreferences("daiary_settings", Context.MODE_PRIVATE)
         val lang = prefs.getString("language", "한국어") ?: "한국어"
@@ -55,63 +72,90 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
         return context.createConfigurationContext(config)
     }
 
+    // ─────────────────────────────────────────────────────────────
     // Repositories & DataSources
+    // ─────────────────────────────────────────────────────────────
+
     private val diaryRepository = DiaryRepository()
     private val dailyDataRepository = DailyDataRepository()
     private val aiRepository = com.smu.daiary.data.repository.AiRepository()
     private val weatherDataSource = WeatherDataSource(context)
     private val photoDataSource = PhotoDataSource(context)
     private val calendarDataSource = CalendarDataSource(context)
-    private val claudeApi = ClaudeApi()
+    private val claudeApi = ClaudeApi()  // 사진 Vision 분석 전용 Claude 직접 호출
 
-    // 블록 목록 (실제 수집 데이터로 채워짐)
+    // ─────────────────────────────────────────────────────────────
+    // UI State — 블록 / 사진 / 결제
+    // ─────────────────────────────────────────────────────────────
+
+    /** AI에 전달할 데이터 블록 목록 (날씨·캘린더·사진·결제). 수집 후 채워짐 */
     private val _blocks = MutableStateFlow<List<ContentBlock>>(emptyList())
     val blocks: StateFlow<List<ContentBlock>> = _blocks.asStateFlow()
 
-    private val _photos =
-        MutableStateFlow<List<PhotoSelectableItem>>(emptyList())
+    /** 오늘 찍힌 사진 목록 — 개별 선택/해제 가능 */
+    private val _photos = MutableStateFlow<List<PhotoSelectableItem>>(emptyList())
+    val photos = _photos.asStateFlow()
 
-    val photos =
-        _photos.asStateFlow()
+    /** 오늘 결제 내역 목록 — 개별 선택/해제 가능 */
+    private val _payments = MutableStateFlow<List<PaymentSelectableItem>>(emptyList())
+    val payments = _payments.asStateFlow()
 
-    private val _payments =
-        MutableStateFlow<List<PaymentSelectableItem>>(emptyList())
+    // ─────────────────────────────────────────────────────────────
+    // UI State — 로딩 / 생성 / 저장
+    // ─────────────────────────────────────────────────────────────
 
-    val payments =
-        _payments.asStateFlow()
-
-    // 데이터 로딩 상태
+    /** 데이터 수집(loadBlocks) 진행 중 여부 */
     private val _isLoadingBlocks = MutableStateFlow(false)
     val isLoadingBlocks: StateFlow<Boolean> = _isLoadingBlocks.asStateFlow()
 
-    // 초안 상태
+    /** AI가 생성한 일기 초안. null이면 아직 생성 전 */
     private val _draft = MutableStateFlow<DiaryDraft?>(null)
     val draft: StateFlow<DiaryDraft?> = _draft.asStateFlow()
 
-    // 저장 중 상태
+    /** Firestore 저장 진행 중 여부 */
     private val _isSaving = MutableStateFlow(false)
     val isSaving: StateFlow<Boolean> = _isSaving.asStateFlow()
 
-    // 날씨·감정 선택
+    // ─────────────────────────────────────────────────────────────
+    // UI State — 날씨·감정 선택
+    // ─────────────────────────────────────────────────────────────
+
+    /** 사용자가 직접 선택한 날씨 이모지/텍스트 */
     private val _selectedWeather = MutableStateFlow<String?>(null)
     val selectedWeather: StateFlow<String?> = _selectedWeather.asStateFlow()
 
+    /** 사용자가 직접 선택한 감정 이모지/텍스트 */
     private val _selectedEmotion = MutableStateFlow<String?>(null)
     val selectedEmotion: StateFlow<String?> = _selectedEmotion.asStateFlow()
 
-    // AI 초안 생성 상태
+    // ─────────────────────────────────────────────────────────────
+    // UI State — AI 초안 생성
+    // ─────────────────────────────────────────────────────────────
+
+    /** Claude API 호출 진행 중 여부 */
     private val _isGenerating = MutableStateFlow(false)
     val isGenerating: StateFlow<Boolean> = _isGenerating.asStateFlow()
 
+    /** AI 초안 생성 실패 시 메시지. UI에서 스낵바로 표시 */
     private val _generateError = MutableStateFlow<String?>(null)
     val generateError: StateFlow<String?> = _generateError.asStateFlow()
 
-    // 저장 완료 이벤트 (스낵바 표시용)
+    // ─────────────────────────────────────────────────────────────
+    // 이벤트
+    // ─────────────────────────────────────────────────────────────
+
+    /** 저장 완료 일회성 이벤트 — UI에서 collect해 스낵바 표시 */
     private val _saveEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val saveEvent: SharedFlow<Unit> = _saveEvent.asSharedFlow()
 
-    // 기존 일기 편집 시 원본 ID (null = 신규 작성)
+    // ─────────────────────────────────────────────────────────────
+    // 내부 변수
+    // ─────────────────────────────────────────────────────────────
+
+    /** 편집 모드일 때 수정 대상 일기의 Firestore ID. null이면 신규 작성 */
     private val _existingEntryId = MutableStateFlow<String?>(null)
+
+    /** AI 프롬프트에 문체 참고용으로 넘길 최근 일기 샘플 (최대 2개) */
     private var recentDiarySamples: String = ""
 
     /**
@@ -129,7 +173,8 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
             _payments.value = emptyList()
 
 
-            val date = LocalDate.now().toString()
+            // 오전 4시 이전이면 전날 기준으로 데이터 수집
+            val date = DiaryDateUtil.diaryDate().toString()
             val blocks = mutableListOf<ContentBlock>()
 
             Log.d(TAG, "📡 데이터 수집 시작 | userId=$userId, date=$date")
@@ -271,6 +316,11 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // 내부 유틸 — 날씨·결제 표시
+    // ─────────────────────────────────────────────────────────────
+
+    /** 한국어 canonical 날씨명을 현재 언어 설정에 맞는 문자열로 변환 */
     private fun localizedWeatherDescription(canonical: String): String = when (canonical) {
         "맑음" -> localizedContext().getString(R.string.weather_sunny)
         "흐림" -> localizedContext().getString(R.string.weather_cloudy)
@@ -279,6 +329,7 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
         "바람" -> localizedContext().getString(R.string.weather_wind)
         else   -> canonical
     }
+    /** 사진 URI를 Base64 문자열로 변환 — Claude Vision API 전달용 */
     private fun uriToBase64(uriString: String): String? {
         return try {
             val uri = Uri.parse(uriString)
@@ -306,12 +357,21 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // 블록 / 사진 / 결제 선택 상태 관리
+    // ─────────────────────────────────────────────────────────────
+
+    /** 블록 선택 토글 — 날씨·캘린더 등 단일 블록 on/off */
     fun toggleBlock(id: String) {
         _blocks.update { list ->
             list.map { if (it.id == id) it.copy(isSelected = !it.isSelected) else it }
         }
     }
 
+    /**
+     * 결제 블록 내용을 selectedPayments 기준으로 필터링.
+     * PaymentDetailSelector에서 체크박스 변경 시 호출됨 (현재는 togglePayment로 대체되는 추세)
+     */
     fun updatePaymentSelection(
         selectedPayments: List<String>
     ) {
@@ -365,6 +425,7 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
 
     }
 
+    /** 사진 개별 선택 토글 — PhotoSelectionScreen의 체크박스와 연결 */
     fun togglePhoto(uri: String) {
         _photos.update { list ->
             list.map { photo ->
@@ -377,6 +438,7 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** 갤러리에서 직접 고른 사진을 목록에 추가 (중복 방지 포함) */
     fun addSelectablePhoto(uri: String) {
         val alreadyExists =
             _photos.value.any {
@@ -395,6 +457,7 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
         syncPhotoBlockSelection()
     }
 
+    /** 결제 건 개별 선택 토글 → 완료 후 결제 블록 요약 텍스트 자동 갱신 */
     fun togglePayment(
         id: Int
     ) {
@@ -426,6 +489,11 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
 
     }
 
+    /**
+     * _payments 선택 상태를 기준으로 결제 블록의 content(요약 텍스트)와
+     * isSelected(선택 건이 하나도 없으면 false)를 동기화.
+     * togglePayment() 호출 시 내부적으로 실행됨.
+     */
     private fun syncPaymentBlockSelection() {
 
         val selected =
@@ -467,6 +535,7 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
 
     }
 
+    /** 선택된 결제 항목으로 "N건 · 총 M원\n- 상세" 형태의 요약 문자열 생성 */
     private fun buildPaymentSummary(
         payments: List<PaymentSelectableItem>
     ): String {
@@ -488,6 +557,7 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
         return "오늘 결제 ${selected.size}건 · 총 ${String.format("%,d", totalAmount)}원\n$paymentLines"
     }
 
+    /** 결제 카테고리명 → 이모지 변환 (결제 블록 표시용) */
     private fun categoryEmoji(category: String): String {
         return when (category) {
             "카페" -> "☕"
@@ -499,6 +569,11 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
     }
 
 
+    // ─────────────────────────────────────────────────────────────
+    // 사진 블록 동기화
+    // ─────────────────────────────────────────────────────────────
+
+    /** 사진 전체 선택 / 전체 해제 */
     fun setAllPhotosSelected(selected: Boolean) {
         _photos.update { list ->
             list.map { photo ->
@@ -507,6 +582,10 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * _photos 선택 상태를 기준으로 사진 블록의 content("N장 · 선택 M장")와
+     * isSelected를 동기화. togglePhoto / addSelectablePhoto 호출 후 실행됨.
+     */
     fun syncPhotoBlockSelection() {
         val totalCount = _photos.value.size
         val selectedCount = _photos.value.count { it.isSelected }
@@ -528,9 +607,23 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
 
 
 
+    // ─────────────────────────────────────────────────────────────
+    // AI 초안 생성
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * 선택된 블록을 기반으로 Claude API에 일기 초안 생성을 요청.
+     *
+     * 처리 순서:
+     * 1. 선택된 사진을 Base64로 변환 후 Claude Vision으로 분석 (photoSummary 추출)
+     * 2. user_settings에서 MBTI 읽어오기
+     * 3. AiRepository를 통해 Claude에 블록 + MBTI + 사진 요약 + 문체 샘플 전달
+     * 4. 실패 시 fallbackTemplate으로 대체 초안 생성
+     * 5. 완료 시 _draft에 결과 저장 → UI가 DraftPreviewScreen으로 자동 전환
+     */
     fun generateDraft() = viewModelScope.launch {
         val selected = _blocks.value.filter { it.isSelected }
-        val today = LocalDate.now().toString()
+        val today = DiaryDateUtil.diaryDate().toString()
 
         if (selected.isEmpty()) {
             _draft.value = DiaryDraft(
@@ -618,6 +711,7 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** AI 생성 실패 시 블록 내용을 단순 나열한 기본 초안 반환 */
     private fun fallbackTemplate(selected: List<ContentBlock>): String = buildString {
         appendLine(localizedContext().getString(R.string.draft_intro))
         appendLine()
@@ -634,20 +728,33 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
         append(localizedContext().getString(R.string.draft_outro))
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // 초안 편집 & 저장
+    // ─────────────────────────────────────────────────────────────
+
+    /** 에러 스낵바 닫힌 뒤 호출 — generateError 초기화 */
     fun clearGenerateError() { _generateError.value = null }
 
+    /** DraftPreviewScreen에서 텍스트 수정 시 초안 content 업데이트 */
     fun updateEditedContent(content: String) {
         _draft.update { it?.copy(editedContent = content) }
     }
 
+    /** 초안에 사진 URI 추가 (DraftPreviewScreen에서 추가 첨부 시) */
     fun addPhoto(uri: String) {
         _draft.update { it?.copy(photos = it.photos + uri) }
     }
 
+    /** 초안에서 사진 URI 제거 */
     fun removePhoto(uri: String) {
         _draft.update { it?.copy(photos = it.photos.filter { p -> p != uri }) }
     }
 
+    /**
+     * 현재 초안을 DiaryEntry로 변환해 Firestore에 저장.
+     * - existingEntryId가 있으면 updateDiary, 없으면 addDiary
+     * - 저장 성공 시 saveEvent emit → UI가 홈으로 이동
+     */
     fun saveDraft(userId: String, onComplete: (Boolean) -> Unit) {
         val d = _draft.value ?: return
         _isSaving.value = true
@@ -691,9 +798,17 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // 날씨·감정 선택 / 편집 모드 진입 / 초기화
+    // ─────────────────────────────────────────────────────────────
+
     fun updateWeatherSelection(weather: String?) { _selectedWeather.value = weather }
     fun updateEmotionSelection(emotion: String?) { _selectedEmotion.value = emotion }
 
+    /**
+     * 홈 화면에서 기존 일기를 편집하러 들어올 때 호출.
+     * DiaryEntry 내용을 DiaryDraft로 변환해 _draft에 세팅.
+     */
     fun loadExistingEntry(entry: DiaryEntry) {
         _existingEntryId.value = entry.id
         _draft.value = DiaryDraft(
@@ -706,10 +821,16 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
         _selectedEmotion.value = entry.emotion.ifEmpty { null }
     }
 
+    /** DraftPreviewScreen 재진입 시 이전 초안만 날리고 블록은 유지 */
     fun clearDraftOnly() {
         _draft.value = null
     }
 
+    /**
+     * 최근 일기 2개의 마지막 500자를 읽어 recentDiarySamples에 저장.
+     * generateDraft() 호출 전 loadBlocks() 내부에서 실행되며,
+     * Claude 프롬프트에 문체 참고 샘플로 전달됨.
+     */
     fun loadRecentDiaryStyle(
         userId: String
     ) {
@@ -737,6 +858,7 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
 
     }
 
+    /** 일기 작성 완료 또는 취소 시 모든 상태 초기화 */
     fun resetDraft() {
         _draft.value = null
         _blocks.value = emptyList()

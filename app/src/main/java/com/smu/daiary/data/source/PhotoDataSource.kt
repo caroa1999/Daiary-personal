@@ -10,11 +10,13 @@ import java.time.LocalDate
 import java.time.ZoneId
 import android.content.ContentUris
 import androidx.core.net.toUri
+import com.smu.daiary.util.DiaryDateUtil
 
 class PhotoDataSource(private val context: Context) {
 
+    // 일기 기준 날짜의 사진만 조회. 오전 4시 이전이면 전날 기준으로 조회한다.
     private fun todayRange(): Pair<Long, Long> {
-        val today = LocalDate.now()
+        val today = DiaryDateUtil.diaryDate()
         val zone = ZoneId.systemDefault()
         val start = today.atStartOfDay(zone).toInstant().toEpochMilli()
         val end = today.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli() - 1

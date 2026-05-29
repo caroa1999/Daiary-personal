@@ -64,9 +64,13 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.outlined.Nightlight
 import com.smu.daiary.R
 import com.smu.daiary.ui.theme.DaiaryTheme
 import com.smu.daiary.ui.theme.LocalDarkTheme
+import com.smu.daiary.util.DiaryDateUtil
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -95,6 +99,10 @@ fun BlockSelectionScreen(
     val selectedPhotoCount = photos.count { it.isSelected }
 
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // 자정~오전 4시 사이 여부 및 일기 기준 날짜
+    val isLateNight = remember { DiaryDateUtil.isLateNight() }
+    val diaryDate = remember { DiaryDateUtil.diaryDate() }
 
     // AI 초안 생성 완료 → 다음 화면 자동 전환
     var hasNavigatedToPreview by remember {
@@ -235,6 +243,15 @@ fun BlockSelectionScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                // 자정~오전 4시 사이에만 "어제 일기 작성 중" 배너 표시
+                if (isLateNight) {
+                    item {
+                        LateNightDiaryBanner(
+                            diaryDate = diaryDate,
+                            isDark = isDark
+                        )
+                    }
+                }
                 items(blocks) { block ->
                     BlockItem(
                         block = block,
@@ -540,4 +557,52 @@ private fun PaymentDetailSelector(
 
     }
 
+}
+
+/**
+ * 자정~오전 4시 사이에만 표시되는 날짜 안내 배너.
+ * 사용자가 어제 날짜의 일기를 작성 중임을 부드럽게 알려준다.
+ */
+@Composable
+private fun LateNightDiaryBanner(
+    diaryDate: java.time.LocalDate,
+    isDark: Boolean
+) {
+    val formatter = DateTimeFormatter.ofPattern("M월 d일", Locale.KOREAN)
+    val dateText = diaryDate.format(formatter)
+
+    val bgColor = if (isDark) Color(0xFF2A2440) else Color(0xFFF0EEFF)
+    val textColor = if (isDark) Color(0xFFB8AEFF) else Color(0xFF6B5CE7)
+
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = bgColor,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Nightlight,
+                contentDescription = null,
+                tint = textColor,
+                modifier = Modifier.size(18.dp)
+            )
+            Column {
+                Text(
+                    text = "$dateText 일기를 작성하고 있어요",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = textColor
+                )
+                Text(
+                    text = "자정이 넘었지만 오전 4시까지는 어제 일기로 저장돼요",
+                    fontSize = 11.sp,
+                    color = textColor.copy(alpha = 0.7f)
+                )
+            }
+        }
+    }
 }

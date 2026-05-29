@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
+import com.smu.daiary.util.DiaryDateUtil
 
 class PaymentNotificationService : NotificationListenerService() {
 
@@ -49,7 +50,8 @@ class PaymentNotificationService : NotificationListenerService() {
         // Firestore에 저장 (mutex로 동시 저장 시 race condition 방지)
         scope.launch {
             val userId = getUserId() ?: return@launch
-            val date = LocalDate.now().toString()
+            // 오전 4시 이전 결제는 전날 일기 데이터로 귀속
+            val date = DiaryDateUtil.diaryDate().toString()
             mutex.withLock {
                 val existing = repository.getDailyData(userId, date).getOrNull()
                 if (existing == null) {
