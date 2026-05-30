@@ -107,4 +107,7 @@ dependencies {
 
     // HTTP client (Anthropic API 호출용)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // Health Connect (건강 데이터 수집용 - 걸음 수, 수면 시간)
+    implementation("androidx.health.connect:connect-client:1.1.0-alpha07")
 }
