@@ -181,7 +181,7 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
 
             // --- 날씨, 캘린더, 사진 병렬 수집 ---
             val weatherDeferred = async { runCatching { weatherDataSource.fetchWeather() } }
-            val calendarDeferred = async { runCatching { calendarDataSource.fetchTodayEvents() } }
+            val calendarDeferred = async { runCatching { calendarDataSource.fetchUpcomingEvents() } }
             val photoDeferred = async { runCatching { photoDataSource.fetchTodayPhotos() } }
 
             // 날씨
