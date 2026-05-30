@@ -53,11 +53,13 @@ import com.smu.daiary.feature.auth.ProfileScreen
 import com.smu.daiary.feature.auth.TermsOfServiceScreen
 import com.smu.daiary.feature.home.HomeScreen
 import com.smu.daiary.feature.home.HomeViewModel
+import com.smu.daiary.feature.settings.SettingsScreen
 import com.smu.daiary.feature.notification.createNotificationChannel
 import com.smu.daiary.feature.write.BlockSelectionScreen
 import com.smu.daiary.feature.write.DiaryDetailScreen
 import com.smu.daiary.feature.write.DiaryEditScreen
 import com.smu.daiary.feature.write.DraftPreviewScreen
+import com.smu.daiary.feature.write.PhotoSelectionScreen
 import com.smu.daiary.feature.write.WriteViewModel
 import com.smu.daiary.ui.theme.DaiaryTheme
 import java.util.Locale
@@ -251,7 +253,15 @@ class MainActivity : ComponentActivity() {
                                         viewModel = writeViewModel,
                                         onNext = { navController.navigate("draft_preview") },
                                         onBack = { navController.popBackStack() },
+                                        onPhotoClick = { navController.navigate("photo_selection") },
                                         onRetry = { writeViewModel.loadBlocks(userId) },
+                                        modifier = Modifier.padding(innerPadding)
+                                    )
+                                }
+                                composable("photo_selection") {
+                                    PhotoSelectionScreen(
+                                        viewModel = writeViewModel,
+                                        onBack = { navController.popBackStack() },
                                         modifier = Modifier.padding(innerPadding)
                                     )
                                 }
@@ -298,6 +308,7 @@ class MainActivity : ComponentActivity() {
                                 composable("profile") {
                                     ProfileScreen(
                                         authViewModel = authViewModel,
+                                        navController = navController,
                                         onBack = { navController.popBackStack() },
                                         isDarkMode = isDarkTheme.value,
                                         onDarkModeChange = { enabled ->
@@ -351,6 +362,11 @@ class MainActivity : ComponentActivity() {
                                             modifier = Modifier.padding(innerPadding)
                                         )
                                     }
+                                }
+                                composable("settings") {
+                                    SettingsScreen(
+                                        onConfirm = { navController.popBackStack() }
+                                    )
                                 }
                             }
                         }

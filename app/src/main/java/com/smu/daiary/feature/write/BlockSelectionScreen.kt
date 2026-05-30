@@ -61,6 +61,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.smu.daiary.R
 import com.smu.daiary.ui.theme.DaiaryTheme
 import com.smu.daiary.ui.theme.LocalDarkTheme
+import java.time.LocalTime
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,11 +69,16 @@ fun BlockSelectionScreen(
     viewModel: WriteViewModel,
     onNext: () -> Unit,
     onBack: () -> Unit,
+    onPhotoClick: () -> Unit = {},
     onRetry: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val isDark = LocalDarkTheme.current
     val wc = if (isDark) WriteColorsDark else WriteColors
+    val isLateNight = remember {
+        val hour = LocalTime.now().hour
+        hour in 0..3
+    }
 
     val blocks by viewModel.blocks.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoadingBlocks.collectAsStateWithLifecycle()
@@ -187,6 +193,27 @@ fun BlockSelectionScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    if (isLateNight) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = wc.PurpleLight,
+                            border = BorderStroke(1.dp, wc.Purple),
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Text(text = "🌙", fontSize = 18.sp)
+                                Column {
+                                    Text(text = "어제 일기 작성 중", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = wc.Purple)
+                                    Text(text = "자정이 지났어요", fontSize = 12.sp, color = wc.TextMuted)
+                                    Text(text = "지금 작성하는 일기는 어제 날짜로 저장돼요", fontSize = 12.sp, color = wc.TextMuted)
+                                }
+                            }
+                        }
+                    }
                     Text(
                         text = stringResource(R.string.block_empty_message),
                         fontSize = 15.sp,
@@ -215,11 +242,42 @@ fun BlockSelectionScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                item {
+                    if (isLateNight) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = wc.PurpleLight,
+                            border = BorderStroke(1.dp, wc.Purple),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Text(text = "🌙", fontSize = 18.sp)
+                                Column {
+                                    Text(
+                                        text = "어제 일기 작성 중",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = wc.Purple
+                                    )
+                                    Text(text = "자정이 지났어요", fontSize = 12.sp, color = wc.TextMuted)
+                                    Text(text = "지금 작성하는 일기는 어제 날짜로 저장돼요", fontSize = 12.sp, color = wc.TextMuted)
+                                }
+                            }
+                        }
+                    }
+                }
                 items(blocks) { block ->
                     BlockItem(
                         block = block,
                         enabled = !isGenerating,
-                        onClick = { viewModel.toggleBlock(block.id) }
+                        onClick = {
+                            if (block.type == BlockType.PHOTO) onPhotoClick()
+                            else viewModel.toggleBlock(block.id)
+                        }
                     )
                 }
             }

@@ -53,7 +53,8 @@ data class HealthData(
 
 /** 결제 내역 (NotificationListenerService) */
 data class PaymentData(
-    val merchant: String = "",      // 가맹점명
-    val amount: Int = 0,            // 금액 (원)
-    val paidAt: Long = 0L           // epoch millis
+    val merchant: String = "",
+    val amount: Int = 0,
+    val paidAt: Long = 0L,
+    val category: String = "기타"
 )

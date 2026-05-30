@@ -68,6 +68,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.core.os.LocaleListCompat
+import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -111,6 +112,7 @@ private object ProfileColors {
 @Composable
 fun ProfileScreen(
     authViewModel: AuthViewModel,
+    navController: NavController,
     onBack: () -> Unit,
     isDarkMode: Boolean,
     onDarkModeChange: (Boolean) -> Unit,
@@ -131,7 +133,9 @@ fun ProfileScreen(
 
     val currentUser = FirebaseAuth.getInstance().currentUser
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("daiary_settings", Context.MODE_PRIVATE) }
+    val prefs = remember { context.getSharedPreferences("user_settings", Context.MODE_PRIVATE) }
+
+    var currentMbti by remember { mutableStateOf(prefs.getString("mbti", null)) }
 
     var language by remember { mutableStateOf(prefs.getString("language", "한국어") ?: "한국어") }
     var notificationEnabled by remember { mutableStateOf(prefs.getBoolean("notification_enabled", true)) }
@@ -144,6 +148,7 @@ fun ProfileScreen(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 paymentListenerEnabled = isNotificationListenerEnabled(context)
+                currentMbti = prefs.getString("mbti", null)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -322,6 +327,12 @@ fun ProfileScreen(
                             onClick = { showTimePickerDialog = true }
                         )
                     }
+                    ProfileDivider()
+                    ArrowRow(
+                        label = "MBTI 설정",
+                        value = currentMbti ?: "사용자 문체 기반",
+                        onClick = { navController.navigate("settings") }
+                    )
                 }
             }
 
