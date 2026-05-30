@@ -82,6 +82,7 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
     private val weatherDataSource = WeatherDataSource(context)
     private val photoDataSource = PhotoDataSource(context)
     private val calendarDataSource = CalendarDataSource(context)
+    private val healthDataSource = com.smu.daiary.data.source.HealthDataSource(context)
     private val claudeApi = ClaudeApi()  // 사진 Vision 분석 전용 Claude 직접 호출
 
     // ─────────────────────────────────────────────────────────────
@@ -263,6 +264,27 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
                         )
                     )
                 }
+
+            // 건강 데이터 (Health Connect)
+            healthDeferred.await()
+                .onSuccess { health ->
+                    Log.d(TAG, "🏃 건강 수집 완료 | 걸음=${health.steps} | 수면=${health.sleepDurationMinutes}분")
+                    dailyDataRepository.updateHealth(userId, date, health)
+
+                    // 데이터가 모두 0이면 블록 표시 안 함 (Health Connect 미설정 사용자)
+                    if (health.steps > 0 || health.sleepDurationMinutes > 0) {
+                        val stepsText = if (health.steps > 0) "${String.format("%,d", health.steps)}보" else null
+                        val sleepText = if (health.sleepDurationMinutes > 0) {
+                            val h = health.sleepDurationMinutes / 60
+                            val m = health.sleepDurationMinutes % 60
+                            "수면 ${h}시간 ${m}분"
+                        } else null
+
+                        val content = listOfNotNull(stepsText, sleepText).joinToString(" · ")
+                        blocks.add(ContentBlock(id = "health", type = BlockType.HEALTH, content = content))
+                    }
+                }
+                .onFailure { Log.w(TAG, "⚠️ 건강 수집 실패", it) }
 
             // 결제 내역 (NotificationListenerService가 Firestore에 저장해둔 데이터를 읽어옴)
             dailyDataRepository.getDailyData(userId, date)
