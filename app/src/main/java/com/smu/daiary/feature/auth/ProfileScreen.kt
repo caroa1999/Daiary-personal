@@ -2,6 +2,7 @@ package com.smu.daiary.feature.auth
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import androidx.core.app.NotificationCompat
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings

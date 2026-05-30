@@ -272,7 +272,7 @@ fun DraftPreviewScreen(
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(wc.PurpleLight)
                                 .clickable {
-                                    selectedPhotoUri = uri
+                                    selectedPhotoUri = photo
                                     showPhotoDialog = true
                                 },
                             contentAlignment = Alignment.Center

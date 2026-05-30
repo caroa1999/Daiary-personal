@@ -69,6 +69,9 @@ import com.smu.daiary.R
 import com.smu.daiary.ui.theme.DaiaryTheme
 import com.smu.daiary.ui.theme.LocalDarkTheme
 import java.time.LocalTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+import com.smu.daiary.util.DiaryDateUtil
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,10 +85,6 @@ fun BlockSelectionScreen(
 ) {
     val isDark = LocalDarkTheme.current
     val wc = if (isDark) WriteColorsDark else WriteColors
-    val isLateNight = remember {
-        val hour = LocalTime.now().hour
-        hour in 0..3
-    }
 
     val blocks by viewModel.blocks.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoadingBlocks.collectAsStateWithLifecycle()

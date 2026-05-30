@@ -412,7 +412,6 @@ class MainActivity : ComponentActivity() {
                                         onPrivacyPolicy = { navController.navigate("privacy_policy") },
                                         onTermsOfService = { navController.navigate("terms_of_service") },
                                         onEditProfile = { navController.navigate("profile_edit") },
-                                        navController = navController,
                                         modifier = Modifier.padding(innerPadding)
                                     )
                                 }
