@@ -68,9 +68,10 @@ import androidx.compose.material.icons.outlined.Nightlight
 import com.smu.daiary.R
 import com.smu.daiary.ui.theme.DaiaryTheme
 import com.smu.daiary.ui.theme.LocalDarkTheme
-import com.smu.daiary.util.DiaryDateUtil
+import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import com.smu.daiary.util.DiaryDateUtil
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,7 +79,7 @@ fun BlockSelectionScreen(
     viewModel: WriteViewModel,
     onNext: () -> Unit,
     onBack: () -> Unit,
-    onPhotoClick: () -> Unit,
+    onPhotoClick: () -> Unit = {},
     onRetry: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -215,6 +216,27 @@ fun BlockSelectionScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    if (isLateNight) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = wc.PurpleLight,
+                            border = BorderStroke(1.dp, wc.Purple),
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Text(text = "🌙", fontSize = 18.sp)
+                                Column {
+                                    Text(text = "어제 일기 작성 중", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = wc.Purple)
+                                    Text(text = "자정이 지났어요", fontSize = 12.sp, color = wc.TextMuted)
+                                    Text(text = "지금 작성하는 일기는 어제 날짜로 저장돼요", fontSize = 12.sp, color = wc.TextMuted)
+                                }
+                            }
+                        }
+                    }
                     Text(
                         text = stringResource(R.string.block_empty_message),
                         fontSize = 15.sp,
@@ -243,13 +265,32 @@ fun BlockSelectionScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // 자정~오전 4시 사이에만 "어제 일기 작성 중" 배너 표시
-                if (isLateNight) {
-                    item {
-                        LateNightDiaryBanner(
-                            diaryDate = diaryDate,
-                            isDark = isDark
-                        )
+                item {
+                    if (isLateNight) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = wc.PurpleLight,
+                            border = BorderStroke(1.dp, wc.Purple),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Text(text = "🌙", fontSize = 18.sp)
+                                Column {
+                                    Text(
+                                        text = "어제 일기 작성 중",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = wc.Purple
+                                    )
+                                    Text(text = "자정이 지났어요", fontSize = 12.sp, color = wc.TextMuted)
+                                    Text(text = "지금 작성하는 일기는 어제 날짜로 저장돼요", fontSize = 12.sp, color = wc.TextMuted)
+                                }
+                            }
+                        }
                     }
                 }
                 items(blocks) { block ->
@@ -257,13 +298,8 @@ fun BlockSelectionScreen(
                         block = block,
                         enabled = !isGenerating,
                         onClick = {
-                            if (block.type == BlockType.PHOTO) {
-                                onPhotoClick()
-                            } else if (block.type == BlockType.PAYMENT) {
-                                viewModel.toggleBlock(block.id)
-                            } else {
-                                viewModel.toggleBlock(block.id)
-                            }
+                            if (block.type == BlockType.PHOTO) onPhotoClick()
+                            else viewModel.toggleBlock(block.id)
                         }
                     )
 

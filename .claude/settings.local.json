@@ -11,7 +11,9 @@
       "Bash(git -C \"C:\\\\.AndroidStudioProjects\\\\Daiary\" ls-files local.properties)",
       "Bash(git fetch *)",
       "Bash(git add *)",
-      "Bash(git rm *)"
+      "Bash(./gradlew assembleDebug)",
+      "Bash(git commit *)",
+      "Bash(git push *)"
     ]
   }
 }

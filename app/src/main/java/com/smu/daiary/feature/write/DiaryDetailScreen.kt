@@ -2,6 +2,7 @@ package com.smu.daiary.feature.write
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -55,6 +56,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
 import androidx.compose.material.icons.outlined.BrokenImage
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
 import com.smu.daiary.R
@@ -105,6 +109,8 @@ fun DiaryDetailScreen(
     var selectedImageUri by remember { mutableStateOf<String?>(null) }
 
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showPhotoDialog by remember { mutableStateOf(false) }
+    var selectedPhotoUri by remember { mutableStateOf("") }
 
     if (showDeleteDialog) {
         AlertDialog(
@@ -235,7 +241,11 @@ fun DiaryDetailScreen(
                             modifier = Modifier
                                 .size(80.dp)
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(wc.PurpleLight),
+                                .background(wc.PurpleLight)
+                                .clickable {
+                                    selectedPhotoUri = uri
+                                    showPhotoDialog = true
+                                },
                             contentAlignment = Alignment.Center
                         ) {
                             Surface(
@@ -273,6 +283,34 @@ fun DiaryDetailScreen(
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+
+    if (showPhotoDialog) {
+        Dialog(
+            onDismissRequest = { showPhotoDialog = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                AsyncImage(
+                    model = selectedPhotoUri,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
+                )
+                IconButton(
+                    onClick = { showPhotoDialog = false },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "닫기",
+                        tint = Color.White
+                    )
                 }
             }
         }

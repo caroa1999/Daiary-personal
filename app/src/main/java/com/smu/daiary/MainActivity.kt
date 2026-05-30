@@ -56,6 +56,7 @@ import com.smu.daiary.feature.auth.ProfileScreen
 import com.smu.daiary.feature.auth.TermsOfServiceScreen
 import com.smu.daiary.feature.home.HomeScreen
 import com.smu.daiary.feature.home.HomeViewModel
+import com.smu.daiary.feature.settings.SettingsScreen
 import com.smu.daiary.feature.notification.createNotificationChannel
 import com.smu.daiary.feature.settings.SettingsScreen
 import com.smu.daiary.feature.write.BlockSelectionScreen
@@ -328,9 +329,7 @@ class MainActivity : ComponentActivity() {
                                             }
                                         },
                                         onBack = { navController.popBackStack() },
-                                        onPhotoClick = {
-                                            navController.navigate("photo_selection")
-                                        },
+                                        onPhotoClick = { navController.navigate("photo_selection") },
                                         onRetry = { writeViewModel.loadBlocks(userId) },
                                         modifier = Modifier.padding(innerPadding)
                                     )
@@ -342,7 +341,6 @@ class MainActivity : ComponentActivity() {
                                         modifier = Modifier.padding(innerPadding)
                                     )
                                 }
-
                                 // "draft_preview": 초안 미리보기 화면
                                 composable("draft_preview") {
                                     DraftPreviewScreen(
@@ -404,6 +402,7 @@ class MainActivity : ComponentActivity() {
                                 composable("profile") {
                                     ProfileScreen(
                                         authViewModel = authViewModel,
+                                        navController = navController,
                                         onBack = { navController.popBackStack() },
                                         isDarkMode = isDarkTheme.value,
                                         onDarkModeChange = { enabled ->
@@ -413,7 +412,6 @@ class MainActivity : ComponentActivity() {
                                         onPrivacyPolicy = { navController.navigate("privacy_policy") },
                                         onTermsOfService = { navController.navigate("terms_of_service") },
                                         onEditProfile = { navController.navigate("profile_edit") },
-                                        navController = navController,
                                         modifier = Modifier.padding(innerPadding)
                                     )
                                 }
@@ -461,9 +459,7 @@ class MainActivity : ComponentActivity() {
                                 }
                                 composable("settings") {
                                     SettingsScreen(
-                                        onConfirm = {
-                                            navController.popBackStack()
-                                        }
+                                        onConfirm = { navController.popBackStack() }
                                     )
                                 }
                             }

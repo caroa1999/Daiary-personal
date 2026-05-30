@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.net.Uri
+import androidx.compose.ui.graphics.Color
 import coil.compose.AsyncImage
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,7 +59,10 @@ fun PhotoSelectionScreen(
                             contentDescription = "뒤로가기"
                         )
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color(0xFFFDFAF5)
+                )
             )
         },
         bottomBar = {
@@ -131,7 +135,13 @@ fun PhotoSelectionScreen(
                         .fillMaxWidth()
                         .clickable {
                             viewModel.togglePhoto(photo.uri)
-                        }
+                        },
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (photo.isSelected)
+                            Color(0xFFE8F5E9)
+                        else
+                            MaterialTheme.colorScheme.surface
+                    )
                 ) {
                     Row(
                         modifier = Modifier
@@ -148,12 +158,7 @@ fun PhotoSelectionScreen(
                             contentScale = ContentScale.Crop
                         )
 
-                        Spacer(modifier = Modifier.width(16.dp))
-
-                        Text(
-                            text = if (photo.isSelected) "선택됨" else "선택 안 됨",
-                            modifier = Modifier.weight(1f)
-                        )
+                        Spacer(modifier = Modifier.weight(1f))
 
                         Checkbox(
                             checked = photo.isSelected,

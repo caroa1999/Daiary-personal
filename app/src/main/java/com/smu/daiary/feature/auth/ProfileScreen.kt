@@ -2,6 +2,7 @@ package com.smu.daiary.feature.auth
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import androidx.core.app.NotificationCompat
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
@@ -70,7 +71,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.core.os.LocaleListCompat
-import androidx.core.app.NotificationCompat
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
@@ -172,9 +172,7 @@ fun ProfileScreen(
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("user_settings", Context.MODE_PRIVATE) }
 
-    var currentMbti by remember {
-        mutableStateOf(prefs.getString("mbti", null))
-    }
+    var currentMbti by remember { mutableStateOf(prefs.getString("mbti", null)) }
 
     var language by remember { mutableStateOf(prefs.getString("language", "한국어") ?: "한국어") }
     var notificationEnabled by remember { mutableStateOf(prefs.getBoolean("notification_enabled", true)) }
@@ -378,77 +376,10 @@ fun ProfileScreen(
                         )
                     }
                     ProfileDivider()
-
                     ArrowRow(
-                        label = "결제 알림 수집",
-                        value =
-                            if (paymentListenerEnabled)
-                                "연결됨"
-                            else
-                                "설정 필요",
-
-                        onClick = {
-                            context.startActivity(
-                                Intent(
-                                    Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS
-                                )
-                            )
-                        }
-                    )
-                    ProfileDivider()
-
-                    ArrowRow(
-                        label = "테스트 결제: 스타벅스",
-                        value = "5,800원",
-                        onClick = {
-                            showTestPaymentNotification(
-                                context = context,
-                                merchant = "스타벅스",
-                                amount = 5800
-                            )
-                        }
-                    )
-
-                    ProfileDivider()
-
-                    ArrowRow(
-                        label = "테스트 결제: GS25",
-                        value = "4,200원",
-                        onClick = {
-                            showTestPaymentNotification(
-                                context = context,
-                                merchant = "GS25",
-                                amount = 4200
-                            )
-                        }
-                    )
-
-                    ProfileDivider()
-
-                    ArrowRow(
-                        label = "테스트 결제: 버스",
-                        value = "1,500원",
-                        onClick = {
-                            showTestPaymentNotification(
-                                context = context,
-                                merchant = "버스",
-                                amount = 1500
-                            )
-                        }
-                    )
-
-                    ProfileDivider()
-
-                    ArrowRow(
-                        label = "테스트 결제: 맥도날드",
-                        value = "8,900원",
-                        onClick = {
-                            showTestPaymentNotification(
-                                context = context,
-                                merchant = "맥도날드",
-                                amount = 8900
-                            )
-                        }
+                        label = "MBTI 설정",
+                        value = currentMbti ?: "사용자 문체 기반",
+                        onClick = { navController.navigate("settings") }
                     )
                 }
             }

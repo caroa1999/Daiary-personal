@@ -4,7 +4,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.AcUnit
 import androidx.compose.material.icons.outlined.Air
 import androidx.compose.material.icons.outlined.Cloud
@@ -51,8 +51,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.text.font.FontWeight
@@ -110,6 +113,8 @@ fun DraftPreviewScreen(
     val wc = if (isDark) WriteColorsDark else WriteColors
 
     val draft by viewModel.draft.collectAsStateWithLifecycle()
+    var showPhotoDialog by remember { mutableStateOf(false) }
+    var selectedPhotoUri by remember { mutableStateOf("") }
     val isSaving by viewModel.isSaving.collectAsStateWithLifecycle()
     val selectedWeather by viewModel.selectedWeather.collectAsStateWithLifecycle()
     val selectedEmotion by viewModel.selectedEmotion.collectAsStateWithLifecycle()
@@ -266,7 +271,11 @@ fun DraftPreviewScreen(
                                 .size(80.dp)
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(wc.PurpleLight)
-                                .clickable { selectedImageUri = photo }
+                                .clickable {
+                                    selectedPhotoUri = photo
+                                    showPhotoDialog = true
+                                },
+                            contentAlignment = Alignment.Center
                         ) {
                             AsyncImage(
                                 model = photo,
@@ -280,34 +289,35 @@ fun DraftPreviewScreen(
             }
         }
     }
-    if (selectedImageUri != null) {
-        var scale by remember(selectedImageUri) { mutableFloatStateOf(1f) }
 
+    if (showPhotoDialog) {
         Dialog(
-            onDismissRequest = { selectedImageUri = null }
+            onDismissRequest = { showPhotoDialog = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .clickable { selectedImageUri = null },
-                contentAlignment = Alignment.Center
+                    .background(Color.Transparent)
             ) {
                 AsyncImage(
-                    model = selectedImageUri,
-                    contentDescription = "확대 사진",
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .pointerInput(selectedImageUri) {
-                            detectTransformGestures { _, _, zoom, _ ->
-                                scale = (scale * zoom).coerceIn(1f, 5f)
-                            }
-                        }
-                        .graphicsLayer(
-                            scaleX = scale,
-                            scaleY = scale,
-                        )
+                    model = selectedPhotoUri,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
                 )
+                IconButton(
+                    onClick = { showPhotoDialog = false },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(16.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "닫기",
+                        tint = Color.White
+                    )
+                }
             }
         }
     }
