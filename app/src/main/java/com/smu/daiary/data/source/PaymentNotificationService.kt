@@ -74,10 +74,27 @@ class PaymentNotificationService : NotificationListenerService() {
     }
 
     // 토스 알림 파싱
-    // 예시 title: "[출금]", text: "스타벅스 4,500원"
+    // 실제 토스 알림 형식:
+    //   title: "1,000원 결제"
+    //   text:  "비씨체크 | 씨유(CU)화곡시원점(일시불)"
     private fun parseToss(title: String, text: String): PaymentData? {
         if (!title.contains("출금") && !title.contains("결제")) return null
-        return parseAmountAndMerchant(text)
+
+        // title에서 금액 추출
+        val amountRegex = Regex("""([\d,]+)원""")
+        val amountMatch = amountRegex.find(title) ?: return null
+        val amount = amountMatch.groupValues[1].replace(",", "").toIntOrNull() ?: return null
+
+        // text의 "|" 뒤에서 가맹점명 추출
+        val merchant = text.substringAfter("|", "").trim()
+        if (merchant.isBlank()) return null
+
+        return PaymentData(
+            merchant = merchant,
+            amount = amount,
+            paidAt = System.currentTimeMillis(),
+            category = classifyPayment(merchant)
+        )
     }
 
     // 카카오뱅크 알림 파싱 (추후 형식 확인 후 업데이트 예정)
