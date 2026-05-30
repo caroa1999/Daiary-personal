@@ -43,6 +43,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.PermissionController
+import com.smu.daiary.data.source.HealthDataSource
 import com.smu.daiary.data.model.DiaryEntry
 import com.smu.daiary.feature.auth.AuthState
 import com.smu.daiary.feature.auth.AuthViewModel
@@ -55,6 +58,7 @@ import com.smu.daiary.feature.home.HomeScreen
 import com.smu.daiary.feature.home.HomeViewModel
 import com.smu.daiary.feature.settings.SettingsScreen
 import com.smu.daiary.feature.notification.createNotificationChannel
+import com.smu.daiary.feature.settings.SettingsScreen
 import com.smu.daiary.feature.write.BlockSelectionScreen
 import com.smu.daiary.feature.write.DiaryDetailScreen
 import com.smu.daiary.feature.write.DiaryEditScreen
@@ -222,6 +226,71 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
 
+                            // Health Connect 권한 요청 (미허용 상태일 때만 시스템 권한 화면 표시)
+                            val healthPermissionLauncher = rememberLauncherForActivityResult(
+                                contract = PermissionController.createRequestPermissionResultContract()
+                            ) { result ->
+                                android.util.Log.d("HealthConnect", "🔄 권한 요청 결과: $result")
+                            }
+
+                            var showHealthConnectFallback by remember { mutableStateOf(false) }
+
+                            LaunchedEffect(Unit) {
+                                val sdkStatus = HealthConnectClient.getSdkStatus(this@MainActivity)
+                                android.util.Log.d("HealthConnect", "🔎 SDK 상태: $sdkStatus (3=AVAILABLE, 2=UPDATE_REQUIRED, 1=UNAVAILABLE)")
+
+                                when (sdkStatus) {
+                                    HealthConnectClient.SDK_AVAILABLE -> {
+                                        val client = HealthConnectClient.getOrCreate(this@MainActivity)
+                                        val granted = client.permissionController.getGrantedPermissions()
+                                        android.util.Log.d("HealthConnect", "✅ 허용된 권한: $granted")
+                                        android.util.Log.d("HealthConnect", "🎯 필요한 권한: ${HealthDataSource.REQUIRED_PERMISSIONS}")
+                                        if (!granted.containsAll(HealthDataSource.REQUIRED_PERMISSIONS)) {
+                                            android.util.Log.d("HealthConnect", "📋 권한 요청 화면 띄움")
+                                            try {
+                                                healthPermissionLauncher.launch(HealthDataSource.REQUIRED_PERMISSIONS)
+                                            } catch (e: Exception) {
+                                                android.util.Log.e("HealthConnect", "❌ 권한 요청 실패", e)
+                                                showHealthConnectFallback = true
+                                            }
+                                        } else {
+                                            android.util.Log.d("HealthConnect", "✔️ 이미 모든 권한 허용됨")
+                                        }
+                                    }
+                                    HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED -> {
+                                        android.util.Log.w("HealthConnect", "⚠️ Health Connect 업데이트 필요 — Play Store 이동 필요")
+                                    }
+                                    else -> {
+                                        android.util.Log.w("HealthConnect", "⚠️ Health Connect SDK 사용 불가")
+                                    }
+                                }
+                            }
+
+                            // 권한 요청 화면이 자동으로 안 뜨는 경우 Health Connect 앱 직접 열기 안내
+                            if (showHealthConnectFallback) {
+                                AlertDialog(
+                                    onDismissRequest = { showHealthConnectFallback = false },
+                                    title = { Text("건강 데이터 권한 설정") },
+                                    text = { Text("Health Connect 앱에서 Daiary의 걸음 수, 수면 데이터 접근 권한을 허용해주세요.") },
+                                    confirmButton = {
+                                        TextButton(onClick = {
+                                            showHealthConnectFallback = false
+                                            try {
+                                                val intent = Intent("androidx.health.ACTION_HEALTH_CONNECT_SETTINGS")
+                                                startActivity(intent)
+                                            } catch (e: Exception) {
+                                                android.util.Log.e("HealthConnect", "❌ Health Connect 앱 열기 실패", e)
+                                            }
+                                        }) { Text("열기") }
+                                    },
+                                    dismissButton = {
+                                        TextButton(onClick = { showHealthConnectFallback = false }) {
+                                            Text("나중에")
+                                        }
+                                    }
+                                )
+                            }
+
                             // 네비게이션 구조
                             NavHost(
                                 navController = navController,
@@ -251,7 +320,14 @@ class MainActivity : ComponentActivity() {
                                 composable("block_selection") {
                                     BlockSelectionScreen(
                                         viewModel = writeViewModel,
-                                        onNext = { navController.navigate("draft_preview") },
+                                        onNext = {
+                                            navController.navigate("draft_preview") {
+                                                popUpTo("block_selection") {
+                                                    inclusive = false
+                                                }
+                                                launchSingleTop = true
+                                            }
+                                        },
                                         onBack = { navController.popBackStack() },
                                         onPhotoClick = { navController.navigate("photo_selection") },
                                         onRetry = { writeViewModel.loadBlocks(userId) },
@@ -270,12 +346,30 @@ class MainActivity : ComponentActivity() {
                                     DraftPreviewScreen(
                                         viewModel = writeViewModel,
                                         userId = userId,
-                                        onEdit = { navController.navigate("diary_edit") },
+
+                                        onEdit = {
+                                            navController.navigate("diary_edit")
+                                        },
+
                                         onSaved = {
                                             writeViewModel.resetDraft()
-                                            navController.popBackStack(route = "main", inclusive = false)
+                                            navController.popBackStack(
+                                                route = "main",
+                                                inclusive = false
+                                            )
                                         },
-                                        onBack = { navController.popBackStack() },
+
+                                        onBack = {
+                                            writeViewModel.clearDraftOnly()
+
+                                            navController.navigate("block_selection") {
+                                                popUpTo("draft_preview") {
+                                                    inclusive = true
+                                                }
+                                                launchSingleTop = true
+                                            }
+                                        },
+
                                         modifier = Modifier.padding(innerPadding)
                                     )
                                 }
@@ -318,6 +412,7 @@ class MainActivity : ComponentActivity() {
                                         onPrivacyPolicy = { navController.navigate("privacy_policy") },
                                         onTermsOfService = { navController.navigate("terms_of_service") },
                                         onEditProfile = { navController.navigate("profile_edit") },
+                                        navController = navController,
                                         modifier = Modifier.padding(innerPadding)
                                     )
                                 }

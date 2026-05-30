@@ -179,10 +179,11 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
 
             Log.d(TAG, "📡 데이터 수집 시작 | userId=$userId, date=$date")
 
-            // --- 날씨, 캘린더, 사진 병렬 수집 ---
+            // --- 날씨, 캘린더, 사진, 건강 병렬 수집 ---
             val weatherDeferred = async { runCatching { weatherDataSource.fetchWeather() } }
-            val calendarDeferred = async { runCatching { calendarDataSource.fetchTodayEvents() } }
+            val calendarDeferred = async { runCatching { calendarDataSource.fetchUpcomingEvents() } }
             val photoDeferred = async { runCatching { photoDataSource.fetchTodayPhotos() } }
+            val healthDeferred = async { runCatching { healthDataSource.fetchTodayHealth() } }
 
             // 날씨
             weatherDeferred.await()

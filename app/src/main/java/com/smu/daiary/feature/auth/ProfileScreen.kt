@@ -1,5 +1,7 @@
 package com.smu.daiary.feature.auth
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
@@ -95,6 +97,40 @@ import com.smu.daiary.ui.theme.White
 private fun isNotificationListenerEnabled(context: Context): Boolean {
     val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
     return flat?.contains(context.packageName) == true
+}
+
+private fun showTestPaymentNotification(
+    context: Context,
+    merchant: String,
+    amount: Int
+) {
+    val channelId = "test_payment_channel"
+
+    val manager =
+        context.getSystemService(Context.NOTIFICATION_SERVICE)
+                as NotificationManager
+
+    val channel =
+        NotificationChannel(
+            channelId,
+            "테스트 결제 알림",
+            NotificationManager.IMPORTANCE_HIGH
+        )
+
+    manager.createNotificationChannel(channel)
+
+    val notification =
+        NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("[테스트 결제]")
+            .setContentText("$merchant ${String.format("%,d", amount)}원 결제")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .build()
+
+    manager.notify(
+        System.currentTimeMillis().toInt(),
+        notification
+    )
 }
 
 private object ProfileColors {
@@ -283,6 +319,7 @@ fun ProfileScreen(
                                 fontWeight = FontWeight.Medium
                             )
                         }
+
                     }
                 }
             }
@@ -291,6 +328,16 @@ fun ProfileScreen(
             ProfileSectionLabel(stringResource(R.string.section_app_settings))
             ProfileCard {
                 Column {
+                    ArrowRow(
+                        label = "AI 작성 스타일",
+                        value = currentMbti ?: "사용자 문체 기반",
+                        onClick = {
+                            navController.navigate("settings")
+                        }
+                    )
+
+                    ProfileDivider()
+
                     SwitchRow(
                         label = stringResource(R.string.setting_dark_mode),
                         checked = isDarkMode,

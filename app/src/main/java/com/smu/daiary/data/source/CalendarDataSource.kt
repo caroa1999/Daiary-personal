@@ -7,20 +7,22 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.ZoneId
+import com.smu.daiary.util.DiaryDateUtil
 
 class CalendarDataSource(private val context: Context) {
 
-    // 오늘 하루(00:00 ~ 23:59)의 시작/끝 시각을 epoch millis로 계산
-    private fun todayRange(): Pair<Long, Long> {
-        val today = LocalDate.now()
+    // 일기 기준 날짜부터 3일치(오늘/내일/모레) 시작/끝 시각을 epoch millis로 계산.
+    // 오전 4시 이전이면 전날 기준으로 조회한다.
+    private fun upcomingRange(): Pair<Long, Long> {
+        val today = DiaryDateUtil.diaryDate()
         val zone = ZoneId.systemDefault()
         val start = today.atStartOfDay(zone).toInstant().toEpochMilli()
-        val end = today.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli() - 1
+        val end = today.plusDays(3).atStartOfDay(zone).toInstant().toEpochMilli() - 1
         return start to end
     }
 
-    suspend fun fetchTodayEvents(): List<CalendarEvent> = withContext(Dispatchers.IO) {
-        val (start, end) = todayRange()
+    suspend fun fetchUpcomingEvents(): List<CalendarEvent> = withContext(Dispatchers.IO) {
+        val (start, end) = upcomingRange()
         val events = mutableListOf<CalendarEvent>()
 
         val uri = CalendarContract.Events.CONTENT_URI
