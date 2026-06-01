@@ -6,6 +6,9 @@ import com.smu.daiary.feature.write.ContentBlock
 class AiRepository(
     private val dataSource: AnthropicDataSource = AnthropicDataSource()
 ) {
+    suspend fun analyzePhotos(photoBase64List: List<String>): String =
+        dataSource.analyzePhotos(photoBase64List)
+
     suspend fun generateDraft(
         blocks: List<ContentBlock>,
         locale: String,

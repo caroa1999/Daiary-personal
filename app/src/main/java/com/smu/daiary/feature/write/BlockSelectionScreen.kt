@@ -1,5 +1,8 @@
 package com.smu.daiary.feature.write
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -8,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,63 +19,68 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.CreditCard
 import androidx.compose.material.icons.outlined.FitnessCenter
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
+import androidx.compose.material.icons.outlined.Nightlight
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.material3.Snackbar
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material.icons.outlined.Nightlight
+import coil.compose.AsyncImage
 import com.smu.daiary.R
-import com.smu.daiary.ui.theme.DaiaryTheme
 import com.smu.daiary.ui.theme.LocalDarkTheme
-import java.time.LocalTime
+import com.smu.daiary.util.DiaryDateUtil
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import com.smu.daiary.util.DiaryDateUtil
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,7 +88,6 @@ fun BlockSelectionScreen(
     viewModel: WriteViewModel,
     onNext: () -> Unit,
     onBack: () -> Unit,
-    onPhotoClick: () -> Unit = {},
     onRetry: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -91,33 +99,33 @@ fun BlockSelectionScreen(
     val isGenerating by viewModel.isGenerating.collectAsStateWithLifecycle()
     val generateError by viewModel.generateError.collectAsStateWithLifecycle()
     val draft by viewModel.draft.collectAsStateWithLifecycle()
-    val selectedCount = blocks.count { it.isSelected }
 
     val photos by viewModel.photos.collectAsStateWithLifecycle()
-    val payments by
-    viewModel.payments
-        .collectAsStateWithLifecycle()
-    val selectedPhotoCount = photos.count { it.isSelected }
+    val calendarEvents by viewModel.calendarEvents.collectAsStateWithLifecycle()
+    val payments by viewModel.payments.collectAsStateWithLifecycle()
 
-    val snackbarHostState = remember { SnackbarHostState() }
+    // 카테고리 블록 펼침 상태
+    var calendarExpanded by remember { mutableStateOf(false) }
+    var photoExpanded by remember { mutableStateOf(false) }
+    var paymentExpanded by remember { mutableStateOf(false) }
 
-    // 자정~오전 4시 사이 여부 및 일기 기준 날짜
-    val isLateNight = remember { DiaryDateUtil.isLateNight() }
-    val diaryDate = remember { DiaryDateUtil.diaryDate() }
-
-    // AI 초안 생성 완료 → 다음 화면 자동 전환
-    var hasNavigatedToPreview by remember {
-        mutableStateOf(false)
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetMultipleContents()
+    ) { uris: List<Uri> ->
+        uris.forEach { uri -> viewModel.addSelectablePhoto(uri.toString()) }
+        viewModel.syncPhotoBlockSelection()
     }
 
+    val snackbarHostState = remember { SnackbarHostState() }
+    val isLateNight = remember { DiaryDateUtil.isLateNight() }
+
+    var hasNavigatedToPreview by remember { mutableStateOf(false) }
     LaunchedEffect(draft) {
         if (draft != null && !hasNavigatedToPreview) {
             hasNavigatedToPreview = true
             onNext()
         }
     }
-
-    // 생성 오류 → 스낵바 표시
     LaunchedEffect(generateError) {
         val error = generateError ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(error)
@@ -172,86 +180,29 @@ fun BlockSelectionScreen(
                     )
                 ) {
                     if (isGenerating) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(22.dp),
-                            color = Color.White,
-                            strokeWidth = 2.5.dp
-                        )
+                        CircularProgressIndicator(modifier = Modifier.size(22.dp), color = Color.White, strokeWidth = 2.5.dp)
                     } else {
-                        Text(
-                            text = stringResource(R.string.btn_select_done),
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Medium
-                        )
+                        Text(text = stringResource(R.string.btn_select_done), fontSize = 16.sp, fontWeight = FontWeight.Medium)
                     }
                 }
             }
         }
     ) { padding ->
         if (isLoading) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.Center
-            ) {
+            Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator(color = wc.Purple)
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = stringResource(R.string.loading_data),
-                        fontSize = 14.sp,
-                        color = wc.TextMuted,
-                        textAlign = TextAlign.Center
-                    )
+                    Text(text = stringResource(R.string.loading_data), fontSize = 14.sp, color = wc.TextMuted, textAlign = TextAlign.Center)
                 }
             }
         } else if (blocks.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    if (isLateNight) {
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = wc.PurpleLight,
-                            border = BorderStroke(1.dp, wc.Purple),
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Text(text = "🌙", fontSize = 18.sp)
-                                Column {
-                                    Text(text = "어제 일기 작성 중", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = wc.Purple)
-                                    Text(text = "자정이 지났어요", fontSize = 12.sp, color = wc.TextMuted)
-                                    Text(text = "지금 작성하는 일기는 어제 날짜로 저장돼요", fontSize = 12.sp, color = wc.TextMuted)
-                                }
-                            }
-                        }
-                    }
-                    Text(
-                        text = stringResource(R.string.block_empty_message),
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = wc.TextPrimary,
-                        textAlign = TextAlign.Center
-                    )
+            Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (isLateNight) LateNightBanner(wc)
+                    Text(text = stringResource(R.string.block_empty_message), fontSize = 15.sp, fontWeight = FontWeight.Medium, color = wc.TextPrimary, textAlign = TextAlign.Center)
                     TextButton(onClick = onRetry) {
-                        Text(
-                            text = stringResource(R.string.btn_retry),
-                            color = wc.Purple,
-                            fontWeight = FontWeight.Medium,
-                            fontSize = 14.sp
-                        )
+                        Text(text = stringResource(R.string.btn_retry), color = wc.Purple, fontWeight = FontWeight.Medium, fontSize = 14.sp)
                     }
                 }
             }
@@ -259,83 +210,119 @@ fun BlockSelectionScreen(
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
-                    start = 24.dp,
-                    end = 24.dp,
+                    start = 24.dp, end = 24.dp,
                     top = padding.calculateTopPadding() + 16.dp,
                     bottom = padding.calculateBottomPadding() + 16.dp
                 ),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 item {
-                    if (isLateNight) {
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = wc.PurpleLight,
-                            border = BorderStroke(1.dp, wc.Purple),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Text(text = "🌙", fontSize = 18.sp)
-                                Column {
-                                    Text(
-                                        text = "어제 일기 작성 중",
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = wc.Purple
-                                    )
-                                    Text(text = "자정이 지났어요", fontSize = 12.sp, color = wc.TextMuted)
-                                    Text(text = "지금 작성하는 일기는 어제 날짜로 저장돼요", fontSize = 12.sp, color = wc.TextMuted)
-                                }
-                            }
-                        }
-                    }
+                    if (isLateNight) LateNightBanner(wc)
                 }
+
                 items(blocks) { block ->
-                    BlockItem(
-                        block = block,
-                        enabled = !isGenerating,
-                        onClick = {
-                            if (block.type == BlockType.PHOTO) onPhotoClick()
-                            else viewModel.toggleBlock(block.id)
-                        }
-                    )
+                    when (block.type) {
 
-                    if (block.type == BlockType.PAYMENT && block.isSelected) {
-                        PaymentDetailSelector(
-                            payments = payments,
-
-                            onToggle = {
-                                    id ->
-
-                                viewModel.togglePayment(
-                                    id
+                        BlockType.CALENDAR -> {
+                            val selectedCount = calendarEvents.count { it.isSelected }
+                            val hasEvents = calendarEvents.isNotEmpty()
+                            CategoryBlockItem(
+                                block = block,
+                                enabled = !isGenerating,
+                                isExpanded = calendarExpanded,
+                                displayText = if (!hasEvents) block.content
+                                              else if (selectedCount == 0) "선택된 일정 없음"
+                                              else "일정 ${selectedCount}개 선택됨",
+                                isExpandable = hasEvents,
+                                onClick = { if (hasEvents) calendarExpanded = !calendarExpanded }
+                            )
+                            if (calendarExpanded && hasEvents) {
+                                Spacer(Modifier.height(4.dp))
+                                CalendarDetailSelector(
+                                    events = calendarEvents,
+                                    onToggle = { id -> viewModel.toggleCalendarEvent(id) }
                                 )
                             }
-                        )
-                    }
+                        }
 
-                }
+                        BlockType.PHOTO -> {
+                            val selectedCount = photos.count { it.isSelected }
+                            CategoryBlockItem(
+                                block = block,
+                                enabled = !isGenerating,
+                                isExpanded = photoExpanded,
+                                displayText = if (selectedCount == 0) "선택된 사진 없음"
+                                              else "사진 ${selectedCount}장 선택됨",
+                                isExpandable = true,
+                                onClick = { photoExpanded = !photoExpanded }
+                            )
+                            if (photoExpanded) {
+                                Spacer(Modifier.height(4.dp))
+                                PhotoDetailSelector(
+                                    photos = photos,
+                                    onToggle = { uri -> viewModel.togglePhoto(uri) },
+                                    onRemove = { uri -> viewModel.removeSelectablePhoto(uri) },
+                                    onAddFromGallery = { galleryLauncher.launch("image/*") }
+                                )
+                            }
+                        }
+
+                        BlockType.PAYMENT -> {
+                            val selectedCount = payments.count { it.isSelected }
+                            val hasPayments = payments.isNotEmpty()
+                            CategoryBlockItem(
+                                block = block,
+                                enabled = !isGenerating,
+                                isExpanded = paymentExpanded,
+                                displayText = if (!hasPayments) block.content
+                                              else if (selectedCount == 0) "선택된 결제 없음"
+                                              else "결제 ${selectedCount}건 선택됨",
+                                isExpandable = hasPayments,
+                                onClick = { if (hasPayments) paymentExpanded = !paymentExpanded }
+                            )
+                            if (paymentExpanded && hasPayments) {
+                                Spacer(Modifier.height(4.dp))
+                                PaymentDetailSelector(
+                                    payments = payments,
+                                    onToggle = { id -> viewModel.togglePayment(id) }
+                                )
+                            }
+                        }
+
+                        else -> {
+                            // WEATHER, HEALTH — 단일 블록, 체크박스 유지
+                            SingleBlockItem(
+                                block = block,
+                                enabled = !isGenerating,
+                                onClick = { viewModel.toggleBlock(block.id) }
+                            )
+                        }
+                    }
                 }
             }
         }
     }
+}
 
+// ─────────────────────────────────────────────────────────────
+// 카테고리 헤더 블록 (▼/▲ 아이콘)
+// ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun BlockItem(block: ContentBlock, enabled: Boolean = true, onClick: () -> Unit) {
+private fun CategoryBlockItem(
+    block: ContentBlock,
+    enabled: Boolean = true,
+    isExpanded: Boolean = false,
+    isExpandable: Boolean = true,
+    displayText: String,
+    onClick: () -> Unit
+) {
     val isDark = LocalDarkTheme.current
     val wc = if (isDark) WriteColorsDark else WriteColors
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = if (block.isSelected) wc.PurpleLight else wc.Bg,
-        border = if (block.isSelected)
-            BorderStroke(1.5.dp, wc.Purple)
-        else
-            BorderStroke(0.5.dp, wc.Border),
+        border = if (block.isSelected) BorderStroke(1.5.dp, wc.Purple) else BorderStroke(0.5.dp, wc.Border),
         modifier = Modifier
             .fillMaxWidth()
             .clickable(enabled = enabled, onClick = onClick)
@@ -346,9 +333,7 @@ private fun BlockItem(block: ContentBlock, enabled: Boolean = true, onClick: () 
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
+                modifier = Modifier.size(40.dp).clip(CircleShape)
                     .background(if (block.isSelected) wc.Purple else wc.SurfaceBg),
                 contentAlignment = Alignment.Center
             ) {
@@ -361,35 +346,289 @@ private fun BlockItem(block: ContentBlock, enabled: Boolean = true, onClick: () 
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = when (block.type) {
-                        BlockType.PAYMENT  -> stringResource(R.string.block_type_payment)
-                        BlockType.PHOTO    -> stringResource(R.string.block_type_photo)
-                        BlockType.CALENDAR -> stringResource(R.string.block_type_calendar)
-                        BlockType.HEALTH   -> stringResource(R.string.block_type_health)
-                        BlockType.WEATHER  -> stringResource(R.string.block_type_weather)
-                    },
+                    text = blockTypeLabel(block.type),
                     fontSize = 11.sp,
                     color = if (block.isSelected) wc.Purple else wc.TextMuted,
                     fontWeight = FontWeight.Medium
                 )
-                Text(
-                    text = block.content,
-                    fontSize = 14.sp,
-                    color = wc.TextPrimary
+                Text(text = displayText, fontSize = 14.sp, color = wc.TextPrimary)
+            }
+            if (isExpandable) {
+                Icon(
+                    imageVector = if (isExpanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
+                    contentDescription = if (isExpanded) "접기" else "펼치기",
+                    tint = if (block.isSelected) wc.Purple else wc.TextMuted,
+                    modifier = Modifier.size(24.dp)
                 )
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+// 단일 블록 (날씨, 건강 — 체크박스)
+// ─────────────────────────────────────────────────────────────
+
+@Composable
+private fun SingleBlockItem(
+    block: ContentBlock,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+) {
+    val isDark = LocalDarkTheme.current
+    val wc = if (isDark) WriteColorsDark else WriteColors
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = if (block.isSelected) wc.PurpleLight else wc.Bg,
+        border = if (block.isSelected) BorderStroke(1.5.dp, wc.Purple) else BorderStroke(0.5.dp, wc.Border),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled, onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Box(
+                modifier = Modifier.size(40.dp).clip(CircleShape)
+                    .background(if (block.isSelected) wc.Purple else wc.SurfaceBg),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = blockTypeIcon(block.type),
+                    contentDescription = null,
+                    tint = if (block.isSelected) Color.White else wc.Purple,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = blockTypeLabel(block.type),
+                    fontSize = 11.sp,
+                    color = if (block.isSelected) wc.Purple else wc.TextMuted,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(text = block.content, fontSize = 14.sp, color = wc.TextPrimary)
             }
             Checkbox(
                 checked = block.isSelected,
                 onCheckedChange = { if (enabled) onClick() },
-                colors = CheckboxDefaults.colors(
-                    checkedColor = wc.Purple,
-                    uncheckedColor = wc.Border
-                )
+                colors = CheckboxDefaults.colors(checkedColor = wc.Purple, uncheckedColor = wc.Border)
             )
         }
     }
 }
 
+// ─────────────────────────────────────────────────────────────
+// 서브아이템 공통 블록 컨테이너
+// ─────────────────────────────────────────────────────────────
+
+@Composable
+private fun SubItemBlock(
+    isSelected: Boolean = false,
+    onClick: (() -> Unit)? = null,
+    content: @Composable RowScope.() -> Unit
+) {
+    val isDark = LocalDarkTheme.current
+    val wc = if (isDark) WriteColorsDark else WriteColors
+    val baseModifier = Modifier
+        .fillMaxWidth()
+        .padding(start = 20.dp)
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = if (isSelected) wc.PurpleLight else wc.SurfaceBg,
+        border = if (isSelected) BorderStroke(1.dp, wc.Purple.copy(alpha = 0.5f)) else BorderStroke(0.5.dp, wc.Border),
+        modifier = if (onClick != null) baseModifier.clickable(onClick = onClick) else baseModifier
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            content()
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+// 캘린더 서브아이템
+// ─────────────────────────────────────────────────────────────
+
+@Composable
+private fun CalendarDetailSelector(
+    events: List<CalendarSelectableItem>,
+    onToggle: (Int) -> Unit
+) {
+    val isDark = LocalDarkTheme.current
+    val wc = if (isDark) WriteColorsDark else WriteColors
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        events.forEach { event ->
+            SubItemBlock(
+                isSelected = event.isSelected,
+                onClick = { onToggle(event.id) }
+            ) {
+                Text(
+                    text = event.displayText,
+                    modifier = Modifier.weight(1f),
+                    fontSize = 13.sp,
+                    color = wc.TextPrimary
+                )
+                Checkbox(
+                    checked = event.isSelected,
+                    onCheckedChange = { onToggle(event.id) },
+                    colors = CheckboxDefaults.colors(checkedColor = wc.Purple, uncheckedColor = wc.Border)
+                )
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+// 사진 서브아이템
+// ─────────────────────────────────────────────────────────────
+
+@Composable
+private fun PhotoDetailSelector(
+    photos: List<PhotoSelectableItem>,
+    onToggle: (String) -> Unit,
+    onRemove: (String) -> Unit,
+    onAddFromGallery: () -> Unit
+) {
+    val isDark = LocalDarkTheme.current
+    val wc = if (isDark) WriteColorsDark else WriteColors
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        // 첫 번째 서브블록: 사진 추가
+        SubItemBlock(isSelected = false, onClick = onAddFromGallery) {
+            Icon(
+                imageVector = Icons.Outlined.Add,
+                contentDescription = "사진 추가",
+                tint = wc.Purple,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "갤러리에서 사진 추가",
+                modifier = Modifier.weight(1f),
+                fontSize = 13.sp,
+                color = wc.Purple,
+                fontWeight = FontWeight.Medium
+            )
+        }
+
+        // 사진 목록
+        if (photos.isEmpty()) {
+            SubItemBlock(isSelected = false) {
+                Text(
+                    text = "오늘 찍은 사진이 없습니다",
+                    modifier = Modifier.weight(1f),
+                    fontSize = 13.sp,
+                    color = wc.TextMuted
+                )
+            }
+        } else {
+            photos.forEach { photo ->
+                SubItemBlock(
+                    isSelected = photo.isSelected,
+                    onClick = { onToggle(photo.uri) }
+                ) {
+                    AsyncImage(
+                        model = photo.uri,
+                        contentDescription = "사진",
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(RoundedCornerShape(8.dp)),
+                        contentScale = ContentScale.Crop
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Checkbox(
+                        checked = photo.isSelected,
+                        onCheckedChange = { onToggle(photo.uri) },
+                        colors = CheckboxDefaults.colors(checkedColor = wc.Purple, uncheckedColor = wc.Border)
+                    )
+                    IconButton(
+                        onClick = { onRemove(photo.uri) },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Close,
+                            contentDescription = "사진 삭제",
+                            tint = wc.TextMuted,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+// 결제 서브아이템
+// ─────────────────────────────────────────────────────────────
+
+@Composable
+private fun PaymentDetailSelector(
+    payments: List<PaymentSelectableItem>,
+    onToggle: (Int) -> Unit
+) {
+    val isDark = LocalDarkTheme.current
+    val wc = if (isDark) WriteColorsDark else WriteColors
+    if (payments.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        payments.forEach { payment ->
+            SubItemBlock(
+                isSelected = payment.isSelected,
+                onClick = { onToggle(payment.id) }
+            ) {
+                Text(
+                    text = payment.displayText,
+                    modifier = Modifier.weight(1f),
+                    fontSize = 13.sp,
+                    color = wc.TextPrimary
+                )
+                Checkbox(
+                    checked = payment.isSelected,
+                    onCheckedChange = { onToggle(payment.id) },
+                    colors = CheckboxDefaults.colors(checkedColor = wc.Purple, uncheckedColor = wc.Border)
+                )
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+// 야간 배너
+// ─────────────────────────────────────────────────────────────
+
+@Composable
+private fun LateNightBanner(wc: WriteColorScheme) {
+    val diaryDate = remember { DiaryDateUtil.diaryDate() }
+    val formatter = DateTimeFormatter.ofPattern("M월 d일", Locale.KOREAN)
+    val dateText = diaryDate.format(formatter)
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = wc.PurpleLight,
+        border = BorderStroke(1.dp, wc.Purple),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Icon(imageVector = Icons.Outlined.Nightlight, contentDescription = null, tint = wc.Purple, modifier = Modifier.size(18.dp))
+            Column {
+                Text(text = "$dateText 일기를 작성하고 있어요", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = wc.Purple)
+                Text(text = "자정이 넘었지만 오전 4시까지는 어제 일기로 저장돼요", fontSize = 11.sp, color = wc.Purple.copy(alpha = 0.7f))
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+// 공통 유틸
+// ─────────────────────────────────────────────────────────────
 
 private fun blockTypeIcon(type: BlockType): ImageVector = when (type) {
     BlockType.PAYMENT  -> Icons.Outlined.CreditCard
@@ -399,247 +638,11 @@ private fun blockTypeIcon(type: BlockType): ImageVector = when (type) {
     BlockType.WEATHER  -> Icons.Outlined.WbSunny
 }
 
-@Preview(showBackground = true, widthDp = 360, heightDp = 780)
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun BlockSelectionScreenPreview() {
-    val sampleBlocks = listOf(
-        ContentBlock("1", BlockType.WEATHER,  "맑음, 23°C", isSelected = true),
-        ContentBlock("2", BlockType.CALENDAR, "오후 3시 팀 미팅", isSelected = false),
-        ContentBlock("3", BlockType.PAYMENT,  "스타벅스 4,500원", isSelected = true),
-        ContentBlock("4", BlockType.HEALTH,   "걸음 수: 8,342보", isSelected = false),
-        ContentBlock("5", BlockType.PHOTO,    "사진 3장", isSelected = false),
-    )
-    DaiaryTheme {
-        val wc = WriteColors
-        Scaffold(
-            containerColor = wc.Bg,
-            topBar = {
-                TopAppBar(
-                    title = {
-                        Text(text = stringResource(R.string.screen_block_selection), fontSize = 18.sp, fontWeight = FontWeight.Medium, color = wc.TextPrimary)
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = {}) {
-                            Icon(imageVector = Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.back), tint = wc.TextPrimary)
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = wc.SurfaceBg)
-                )
-            },
-            bottomBar = {
-                Surface(color = wc.SurfaceBg, shadowElevation = 8.dp) {
-                    Button(
-                        onClick = {},
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 24.dp, vertical = 16.dp)
-                            .padding(bottom = 8.dp)
-                            .height(52.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = wc.Purple)
-                    ) {
-                        Text(text = stringResource(R.string.btn_select_done), fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                    }
-                }
-            }
-        ) { padding ->
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(
-                    start = 24.dp, end = 24.dp,
-                    top = padding.calculateTopPadding() + 16.dp,
-                    bottom = padding.calculateBottomPadding() + 16.dp
-                ),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                items(sampleBlocks) { block -> BlockItem(block = block, onClick = {}) }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PaymentDetailSelector(
-
-    payments:
-    List<PaymentSelectableItem>,
-
-    onToggle:
-        (Int) -> Unit
-
-) {
-
-    val isDark =
-        LocalDarkTheme.current
-
-    val wc =
-        if (isDark)
-            WriteColorsDark
-        else
-            WriteColors
-
-    if (
-        payments.isEmpty()
-    ) return
-
-    Surface(
-
-        shape =
-            RoundedCornerShape(
-                16.dp
-            ),
-
-        color =
-            wc.SurfaceBg,
-
-        border =
-            BorderStroke(
-                0.5.dp,
-                wc.Border
-            ),
-
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(
-                    start = 12.dp,
-                    end = 12.dp
-                )
-
-    ) {
-
-        Column(
-
-            modifier =
-                Modifier
-                    .padding(
-                        12.dp
-                    ),
-
-            verticalArrangement =
-                Arrangement
-                    .spacedBy(
-                        8.dp
-                    )
-
-        ) {
-
-            Text(
-
-                text =
-                    "결제 상세",
-
-                color =
-                    wc.TextMuted
-
-            )
-
-            payments.forEach { payment ->
-
-                Row(
-
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable {
-
-                                onToggle(payment.id)
-
-                            },
-
-                    horizontalArrangement =
-                        Arrangement
-                            .SpaceBetween,
-
-                    verticalAlignment =
-                        Alignment
-                            .CenterVertically
-
-                ) {
-
-                    Text(
-
-                        text =
-                            payment.displayText,
-
-                        modifier =
-                            Modifier
-                                .weight(
-                                    1f
-                                )
-
-                    )
-
-                    Checkbox(
-
-                        checked =
-                            payment.isSelected,
-
-                        onCheckedChange = {
-
-                            onToggle(
-                                payment.id
-                            )
-
-                        }
-
-                    )
-
-                }
-
-            }
-
-        }
-
-    }
-
-}
-
-/**
- * 자정~오전 4시 사이에만 표시되는 날짜 안내 배너.
- * 사용자가 어제 날짜의 일기를 작성 중임을 부드럽게 알려준다.
- */
-@Composable
-private fun LateNightDiaryBanner(
-    diaryDate: java.time.LocalDate,
-    isDark: Boolean
-) {
-    val formatter = DateTimeFormatter.ofPattern("M월 d일", Locale.KOREAN)
-    val dateText = diaryDate.format(formatter)
-
-    val bgColor = if (isDark) Color(0xFF2A2440) else Color(0xFFF0EEFF)
-    val textColor = if (isDark) Color(0xFFB8AEFF) else Color(0xFF6B5CE7)
-
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = bgColor,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.Nightlight,
-                contentDescription = null,
-                tint = textColor,
-                modifier = Modifier.size(18.dp)
-            )
-            Column {
-                Text(
-                    text = "$dateText 일기를 작성하고 있어요",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = textColor
-                )
-                Text(
-                    text = "자정이 넘었지만 오전 4시까지는 어제 일기로 저장돼요",
-                    fontSize = 11.sp,
-                    color = textColor.copy(alpha = 0.7f)
-                )
-            }
-        }
-    }
+private fun blockTypeLabel(type: BlockType): String = when (type) {
+    BlockType.PAYMENT  -> stringResource(R.string.block_type_payment)
+    BlockType.PHOTO    -> stringResource(R.string.block_type_photo)
+    BlockType.CALENDAR -> stringResource(R.string.block_type_calendar)
+    BlockType.HEALTH   -> stringResource(R.string.block_type_health)
+    BlockType.WEATHER  -> stringResource(R.string.block_type_weather)
 }

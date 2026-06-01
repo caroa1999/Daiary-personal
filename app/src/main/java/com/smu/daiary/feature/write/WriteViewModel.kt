@@ -12,7 +12,6 @@ import com.smu.daiary.data.repository.DiaryRepository
 import com.smu.daiary.data.source.CalendarDataSource
 import com.smu.daiary.data.source.PhotoDataSource
 import com.smu.daiary.data.source.WeatherDataSource
-import com.smu.daiary.data.remote.ClaudeApi
 import com.smu.daiary.feature.write.PaymentSelectableItem
 import com.smu.daiary.R
 import kotlinx.coroutines.async
@@ -25,8 +24,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -83,8 +80,6 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
     private val photoDataSource = PhotoDataSource(context)
     private val calendarDataSource = CalendarDataSource(context)
     private val healthDataSource = com.smu.daiary.data.source.HealthDataSource(context)
-    private val claudeApi = ClaudeApi()  // 사진 Vision 분석 전용 Claude 직접 호출
-
     // ─────────────────────────────────────────────────────────────
     // UI State — 블록 / 사진 / 결제
     // ─────────────────────────────────────────────────────────────
@@ -96,6 +91,10 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
     /** 오늘 찍힌 사진 목록 — 개별 선택/해제 가능 */
     private val _photos = MutableStateFlow<List<PhotoSelectableItem>>(emptyList())
     val photos = _photos.asStateFlow()
+
+    /** 오늘 캘린더 일정 목록 — 개별 선택/해제 가능 */
+    private val _calendarEvents = MutableStateFlow<List<CalendarSelectableItem>>(emptyList())
+    val calendarEvents = _calendarEvents.asStateFlow()
 
     /** 오늘 결제 내역 목록 — 개별 선택/해제 가능 */
     private val _payments = MutableStateFlow<List<PaymentSelectableItem>>(emptyList())
@@ -171,6 +170,7 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
             _isLoadingBlocks.value = true
             _blocks.value = emptyList()
             _photos.value = emptyList()
+            _calendarEvents.value = emptyList()
             _payments.value = emptyList()
 
 
@@ -212,23 +212,38 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
                     Log.d(TAG, "📅 캘린더 수집 완료: ${events.size}개")
                     dailyDataRepository.updateCalendar(userId, date, events)
                     if (events.isEmpty()) {
-                        blocks.add(ContentBlock(id = "calendar_0", type = BlockType.CALENDAR, content = localizedContext().getString(R.string.block_calendar_empty)))
+                        blocks.add(ContentBlock(
+                            id = "calendar_summary", type = BlockType.CALENDAR,
+                            content = localizedContext().getString(R.string.block_calendar_empty),
+                            isSelected = false
+                        ))
                     } else {
                         val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
-                        events.forEachIndexed { i, event ->
+                        _calendarEvents.value = events.mapIndexed { i, event ->
                             val startStr = Instant.ofEpochMilli(event.startTime)
                                 .atZone(ZoneId.systemDefault()).format(timeFormatter)
                             val locationPart = if (event.location.isNotBlank()) " · ${event.location}" else ""
-                            blocks.add(ContentBlock(
-                                id = "calendar_$i", type = BlockType.CALENDAR,
-                                content = "${event.title} $startStr$locationPart"
-                            ))
+                            CalendarSelectableItem(
+                                id = i,
+                                displayText = "${event.title} $startStr$locationPart",
+                                startTime = event.startTime,
+                                isSelected = true
+                            )
                         }
+                        blocks.add(ContentBlock(
+                            id = "calendar_summary", type = BlockType.CALENDAR,
+                            content = buildCalendarSummary(_calendarEvents.value),
+                            isSelected = true
+                        ))
                     }
                 }
                 .onFailure {
                     Log.w(TAG, "⚠️ 캘린더 수집 실패 (권한 문제)", it)
-                    blocks.add(ContentBlock(id = "calendar_0", type = BlockType.CALENDAR, content = localizedContext().getString(R.string.block_calendar_unavailable)))
+                    blocks.add(ContentBlock(
+                        id = "calendar_summary", type = BlockType.CALENDAR,
+                        content = localizedContext().getString(R.string.block_calendar_unavailable),
+                        isSelected = false
+                    ))
                 }
 
             // 사진
@@ -461,6 +476,12 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** 블록 선택 화면에서 사진을 목록에서 제거 */
+    fun removeSelectablePhoto(uri: String) {
+        _photos.update { list -> list.filter { it.uri != uri } }
+        syncPhotoBlockSelection()
+    }
+
     /** 갤러리에서 직접 고른 사진을 목록에 추가 (중복 방지 포함) */
     fun addSelectablePhoto(uri: String) {
         val alreadyExists =
@@ -478,6 +499,40 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         syncPhotoBlockSelection()
+    }
+
+    /** 캘린더 일정 개별 선택 토글 → 완료 후 캘린더 블록 요약 텍스트 자동 갱신 */
+    fun toggleCalendarEvent(id: Int) {
+        _calendarEvents.update { list ->
+            list.map { if (it.id == id) it.copy(isSelected = !it.isSelected) else it }
+        }
+        syncCalendarBlockSelection()
+    }
+
+    /**
+     * _calendarEvents 선택 상태를 기준으로 캘린더 블록의 content와
+     * isSelected(선택 건이 하나도 없으면 false)를 동기화.
+     */
+    private fun syncCalendarBlockSelection() {
+        val selected = _calendarEvents.value.filter { it.isSelected }
+        _blocks.update { list ->
+            list.map { block ->
+                if (block.type == BlockType.CALENDAR) {
+                    block.copy(
+                        content = buildCalendarSummary(_calendarEvents.value),
+                        isSelected = selected.isNotEmpty()
+                    )
+                } else block
+            }
+        }
+    }
+
+    /** 선택된 일정 항목으로 요약 문자열 생성 */
+    private fun buildCalendarSummary(events: List<CalendarSelectableItem>): String {
+        val selected = events.filter { it.isSelected }
+        if (selected.isEmpty()) return localizedContext().getString(R.string.block_calendar_empty)
+        val lines = selected.joinToString("\n") { "- ${it.displayText}" }
+        return "일정 ${selected.size}개\n$lines"
     }
 
     /** 결제 건 개별 선택 토글 → 완료 후 결제 블록 요약 텍스트 자동 갱신 */
@@ -685,15 +740,12 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
             Log.d(TAG, "📸 선택된 사진 수: ${_photos.value.count { it.isSelected }}")
             Log.d(TAG, "📸 base64 변환 성공 수: ${selectedPhotoBase64.size}")
 
-            val photoSummary =
-                withContext(Dispatchers.IO) {
-                    try {
-                        claudeApi.analyzePhotos(selectedPhotoBase64)
-                    } catch (e: Exception) {
-                        Log.e(TAG, "❌ 사진 분석 실패", e)
-                        "사진 ${selectedPhotoBase64.size}장이 선택됨"
-                    }
-                }
+            val photoSummary = try {
+                aiRepository.analyzePhotos(selectedPhotoBase64)
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ 사진 분석 실패", e)
+                "사진 ${selectedPhotoBase64.size}장이 선택됨"
+            }
 
             Log.d(TAG, "📸 사진 분석 결과: $photoSummary")
 

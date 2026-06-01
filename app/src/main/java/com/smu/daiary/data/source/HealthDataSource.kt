@@ -67,12 +67,21 @@ class HealthDataSource(private val context: Context) {
 
         val date = DiaryDateUtil.diaryDate()
         val zone = ZoneId.systemDefault()
-        val start = date.atStartOfDay(zone).toInstant()
-        val end = date.plusDays(1).atStartOfDay(zone).toInstant()
-        val filter = TimeRangeFilter.between(start, end)
+        val dayStart = date.atStartOfDay(zone).toInstant()
+        val dayEnd = date.plusDays(1).atStartOfDay(zone).toInstant()
 
-        val steps = readSteps(client, filter)
-        val sleepMinutes = readSleep(client, filter)
+        // 걸음 수: 오늘 범위만 (startTime 기준 필터)
+        val stepsFilter = TimeRangeFilter.between(dayStart, dayEnd)
+        val steps = readSteps(client, stepsFilter)
+
+        // 수면: 어젯밤 시작한 세션도 포함되도록 어제 정오부터 넓게 조회.
+        // Health Connect는 IntervalRecord를 startTime 기준 필터링하므로,
+        // 어제 23시 시작한 수면을 잡으려면 필터 시작이 그보다 앞이어야 함.
+        val sleepFilter = TimeRangeFilter.between(
+            date.minusDays(1).atTime(12, 0).atZone(zone).toInstant(),
+            dayEnd
+        )
+        val sleepMinutes = readSleep(client, sleepFilter, dayStart, dayEnd)
 
         Log.d(TAG, "🏃 건강 수집 완료 | steps=$steps | sleep=${sleepMinutes}분")
         return HealthData(steps = steps, sleepDurationMinutes = sleepMinutes)
@@ -86,14 +95,23 @@ class HealthDataSource(private val context: Context) {
         return response.records.sumOf { it.count }.toInt()
     }
 
-    /** 시간 범위 내 SleepSessionRecord 길이를 모두 더해 총 수면 분 반환 */
-    private suspend fun readSleep(client: HealthConnectClient, filter: TimeRangeFilter): Int {
+    /**
+     * 수면 세션 조회. 넓은 시간 범위로 읽어온 뒤,
+     * 오늘 끝난 세션(endTime이 dayStart ~ dayEnd 안)만 합산.
+     * → 어젯밤 23시 시작 ~ 오늘 07시 종료 같은 세션이 정확히 포함됨.
+     */
+    private suspend fun readSleep(
+        client: HealthConnectClient,
+        filter: TimeRangeFilter,
+        dayStart: java.time.Instant,
+        dayEnd: java.time.Instant
+    ): Int {
         val response = client.readRecords(
             ReadRecordsRequest(SleepSessionRecord::class, filter)
         )
-        val totalMinutes = response.records.sumOf {
-            (it.endTime.toEpochMilli() - it.startTime.toEpochMilli()) / 60_000L
-        }
+        val totalMinutes = response.records
+            .filter { it.endTime >= dayStart && it.endTime < dayEnd }
+            .sumOf { (it.endTime.toEpochMilli() - it.startTime.toEpochMilli()) / 60_000L }
         return totalMinutes.toInt()
     }
 }
