@@ -263,7 +263,6 @@ ${if (recentDiarySamples.isNotBlank()) """
        
 $recentDiarySamples
 """ else ""}
->>>>>>> origin/develop
 
 [오늘의 데이터]
 $blocksText
