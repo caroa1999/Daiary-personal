@@ -263,7 +263,7 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
                             ContentBlock(
                                 id = "photo",
                                 type = BlockType.PHOTO,
-                                content = "오늘 찍은 사진 ${photos.size}장 · 선택 ${photos.size}장",
+                                content = localizedContext().getString(R.string.block_photo_selection_content, photos.size, photos.size),
                                 isSelected = photos.isNotEmpty()
                                 )
                             )
@@ -673,7 +673,7 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
             list.map { block ->
                 if (block.type == BlockType.PHOTO) {
                     block.copy(
-                        content = "오늘 찍은 사진 ${totalCount}장 · 선택 ${selectedCount}장",
+                        content = localizedContext().getString(R.string.block_photo_selection_content, totalCount, selectedCount),
                         isSelected = hasSelectedPhoto
                     )
                 } else {
@@ -728,7 +728,9 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             val prefs = context.getSharedPreferences("daiary_settings", android.content.Context.MODE_PRIVATE)
-            val locale = if (prefs.getString("language", "한국어") == "English") "en" else "ko"
+            val savedLang = prefs.getString("language", "한국어")
+            val locale = if (savedLang == "English") "en" else "ko"
+            android.util.Log.d(TAG, "🌐 저장된 언어: $savedLang → locale: $locale")
 
             val selectedPhotoBase64 =
                 _photos.value
@@ -761,7 +763,7 @@ class WriteViewModel(application: Application) : AndroidViewModel(application) {
                     locale = locale,
                     mbti = mbti,
                     photoSummary = photoSummary,
-                    recentDiarySamples = recentDiarySamples
+                    recentDiarySamples = if (locale == "en") "" else recentDiarySamples
                 )
             val content = result.getOrElse { fallbackTemplate(selected) }
 
