@@ -86,7 +86,9 @@ class AnthropicDataSource {
         locale: String,
         mbti: String,
         recentDiarySamples: String = ""
-    ): String = if (locale == "en") {
+    ): String {
+        android.util.Log.d("AnthropicDS", "🔍 buildPrompt locale = $locale")
+        return if (locale == "en") {
         """
 You are an AI that writes a warm, personal diary entry based on the user's daily data.
 
@@ -180,16 +182,9 @@ ${if (recentDiarySamples.isNotBlank()) """
         $recentDiarySamples
         """ else ""}
 
-${if (recentDiarySamples.isNotBlank()) """
-        [사용자 기존 일기 문체 참고]
-        아래는 사용자가 최근 작성한 일기입니다.내용이나 사건을 복사하지 말고, 문장 길이, 감정 표현 정도, 회고 방식, 말투만 참고하세요.
-        여러 일기의 스타일이 다르면 가장 최근 일기를 우선 참고하세요.
-
-        $recentDiarySamples
-        """ else ""}
-
 [오늘의 데이터]
 $blocksText
 """.trimIndent()
     }
+}
 }
