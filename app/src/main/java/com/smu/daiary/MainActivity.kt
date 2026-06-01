@@ -63,7 +63,6 @@ import com.smu.daiary.feature.write.BlockSelectionScreen
 import com.smu.daiary.feature.write.DiaryDetailScreen
 import com.smu.daiary.feature.write.DiaryEditScreen
 import com.smu.daiary.feature.write.DraftPreviewScreen
-import com.smu.daiary.feature.write.PhotoSelectionScreen
 import com.smu.daiary.feature.write.WriteViewModel
 import com.smu.daiary.ui.theme.DaiaryTheme
 import java.util.Locale
@@ -329,15 +328,7 @@ class MainActivity : ComponentActivity() {
                                             }
                                         },
                                         onBack = { navController.popBackStack() },
-                                        onPhotoClick = { navController.navigate("photo_selection") },
                                         onRetry = { writeViewModel.loadBlocks(userId) },
-                                        modifier = Modifier.padding(innerPadding)
-                                    )
-                                }
-                                composable("photo_selection") {
-                                    PhotoSelectionScreen(
-                                        viewModel = writeViewModel,
-                                        onBack = { navController.popBackStack() },
                                         modifier = Modifier.padding(innerPadding)
                                     )
                                 }
