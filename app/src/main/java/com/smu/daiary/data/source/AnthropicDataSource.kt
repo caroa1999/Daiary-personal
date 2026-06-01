@@ -260,9 +260,7 @@ ${if (recentDiarySamples.isNotBlank()) """
         과도한 감정 묘사를 추가하지 마세요.사용자 문체가 짧으면 짧게,
         담백하면 담백하게 유지하세요.최근 일기를 가장 우선 참고하세요.
 
-        $recentDiarySamples
-        """ else ""}
-=======
+       
 $recentDiarySamples
 """ else ""}
 >>>>>>> origin/develop
