@@ -245,7 +245,6 @@ ${if (recentDiarySamples.isNotBlank()) """
     - 사용자 문체가 짧으면 짧게, 담백하면 담백하게 유지하세요.
     - 최근 일기 3개까지를 가장 우선 참고하세요.
 
-<<<<<<< HEAD
         아래는 사용자가 최근 작성한 일기입니다.내용이나 사건을 복사하지 말고
                 다음 요소만 우선 모방하세요 .
 
@@ -260,12 +259,9 @@ ${if (recentDiarySamples.isNotBlank()) """
         과도한 감정 묘사를 추가하지 마세요.사용자 문체가 짧으면 짧게,
         담백하면 담백하게 유지하세요.최근 일기를 가장 우선 참고하세요.
 
-        $recentDiarySamples
-        """ else ""}
-=======
+       
 $recentDiarySamples
 """ else ""}
->>>>>>> origin/develop
 
 [오늘의 데이터]
 $blocksText
@@ -292,5 +288,4 @@ $blocksText
         "ESFP" -> "밝고 생생한 감정을 표현한다. 순간의 즐거움과 분위기를 강조한다."
         else   -> "자연스럽고 담백한 일기체로 작성한다."
     }
-}
 }
