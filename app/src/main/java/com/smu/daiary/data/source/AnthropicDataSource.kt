@@ -28,10 +28,20 @@ class AnthropicDataSource {
         locale: String,
         mbti: String,
         photoSummary: String? = null,
+        followUpAnswers: Map<Int, String> = emptyMap(),
         recentDiarySamples: String = ""
     ): String =
         withContext(Dispatchers.IO) {
             val blocksText = blocks.joinToString("\n") { "- [${it.type.label}] ${it.content}" }
+
+            val followUpAnswerText =
+                followUpAnswers
+                    .filter { it.value.isNotBlank() }
+                    .entries
+                    .sortedBy { it.key }
+                    .joinToString("\n\n") { (_, text) ->
+                        text
+                    }
 
             val photoText = photoSummary
                 ?.takeIf { it.isNotBlank() }
@@ -48,7 +58,8 @@ class AnthropicDataSource {
                 blocksText = blocksText + photoText,
                 locale = locale,
                 mbti = mbti,
-                recentDiarySamples = recentDiarySamples
+                recentDiarySamples = recentDiarySamples,
+                followUpAnswerText = followUpAnswerText
             )
 
             val body = JSONObject().apply {
@@ -72,6 +83,8 @@ class AnthropicDataSource {
             val response = client.newCall(request).execute()
             val responseBody = response.body?.string() ?: throw Exception("빈 응답")
 
+
+
             if (!response.isSuccessful) {
                 throw Exception("API 오류 (${response.code}): $responseBody")
             }
@@ -93,14 +106,65 @@ class AnthropicDataSource {
                         .put(
                             "text",
                             """
-                            다음 사진들을 보고 사용자의 일기에 참고할 수 있도록 요약해줘.
+다음 이미지는 사용자가 오늘 하루의 일기 생성을 위해 선택한 사진들입니다.
+너의 역할은 일기를 직접 쓰는 것이 아니라, 사진에서 확인 가능한 정보를 구조화해서 정리하는 것입니다.
 
-                            [요약 조건]
-                            - 사진 속 장소, 상황, 행동, 분위기를 자연스럽게 설명
-                            - 확실하지 않은 내용은 단정하지 말 것
-                            - 사용자가 하루를 회상하는 데 도움이 되는 정보만 작성
-                            - 5문장 이내로 요약
-                            """.trimIndent()
+[핵심 원칙]
+- 절대 일기 본문을 작성하지 마세요.
+- "오늘은", "나는", "~했다" 같은 일기체 표현을 사용하지 마세요.
+- 사진에서 실제로 보이는 사실만 작성하세요.
+- 사용자의 감정, 의도, 이동 경로, 시간 순서는 추측하지 마세요.
+- 여러 장의 사진에서 공통적으로 관찰되는 요소는 함께 요약하되, 사진 사이의 시간 흐름이나 인과관계는 추측하지 마세요.
+- 사진 순서를 하루의 시간 순서로 단정하지 마세요.
+- 장소는 명확히 식별될 때만 작성하세요.
+- 확실하지 않은 장소, 음식, 사물은 "~처럼 보임", "~계열로 보임"이라고 표시하세요.
+- 집, 학교, 회사, 외출, 귀가 같은 생활 맥락은 사진만으로 단정하지 마세요.
+- 사진에 없는 행동이나 일정을 새로 만들지 마세요.
+- 감정 표현은 사용하지 말고, 분위기 표현도 시각적으로 확인 가능한 범위로 제한하세요.
+- 각 항목은 짧은 키워드 또는 짧은 문장으로 작성하세요.
+
+[여러 장 사진 분석 규칙]
+- 사진이 여러 장이면 개별 사진의 요소뿐 아니라 공통적으로 보이는 소재도 정리하세요.
+- 단, 공통점은 "반복적으로 보이는 시각 요소"만 작성하세요.
+- 사진 간 관계가 불확실하면 "동일 장소 가능성 있음", "관련성 불확실"처럼 표시하세요.
+- "그 후", "이후", "마지막으로", "집에 돌아와서" 같은 시간 연결 표현은 사용하지 마세요.
+
+[출력 형식]
+
+# 사진 분석 결과
+
+## 확실히 보이는 사실
+### 음식/음료
+- ...
+
+### 장소/풍경
+- ...
+
+### 동물/사람
+- ...
+
+### 사물
+- ...
+
+## 여러 사진을 함께 봤을 때
+- 공통 소재:
+- 반복되는 분위기:
+- 장소/상황의 관련성:
+
+## 일기에 활용 가능한 관찰 요약
+- 여러 사진을 종합했을 때 일기 작성에 참고할 수 있는 객관적 관찰을 2~4개 작성하세요.
+- 단, 사용자의 감정, 이동 경로, 시간 순서, 사진에 없는 행동은 포함하지 마세요.
+
+## 일기 작성에 활용하기 좋은 소재
+- ...
+
+## 단정하면 안 되는 내용
+- 사용자의 감정
+- 사용자의 이동 경로
+- 사진 촬영 순서
+- 집/귀가 여부
+- 사진에 보이지 않는 일정이나 행동
+""".trimIndent()
                         )
                 )
                 photoBase64List.forEach { base64 ->
@@ -111,7 +175,7 @@ class AnthropicDataSource {
                                 "source",
                                 JSONObject()
                                     .put("type", "base64")
-                                    .put("media_type", "image/jpeg")
+                                    .put("media_type", "image/png")
                                     .put("data", base64)
                             )
                     )
@@ -138,62 +202,262 @@ class AnthropicDataSource {
 
             try {
                 val response = client.newCall(request).execute()
-                val responseBody = response.body?.string() ?: return@withContext ""
-                JSONObject(responseBody)
-                    .getJSONArray("content")
+                val responseBody = response.body?.string().orEmpty()
+
+                android.util.Log.e("AnthropicDataSource", "사진 분석 응답 코드 = ${response.code}")
+                android.util.Log.e("AnthropicDataSource", "사진 분석 응답 본문 = $responseBody")
+
+                if (responseBody.isBlank()) {
+                    return@withContext ""
+                }
+
+                val json = JSONObject(responseBody)
+
+                if (!json.has("content")) {
+                    android.util.Log.e("AnthropicDataSource", "사진 분석 응답에 content 없음 = $responseBody")
+                    return@withContext ""
+                }
+
+                json.getJSONArray("content")
                     .getJSONObject(0)
                     .getString("text")
             } catch (e: Exception) {
+                android.util.Log.e("AnthropicDataSource", "사진 분석 API 호출 실패", e)
                 ""
             }
         }
+
+    suspend fun generateFollowUpQuestions(
+        blocks: List<ContentBlock>,
+        locale: String,
+        photoSummary: String? = null
+    ): List<String> = withContext(Dispatchers.IO) {
+        val blocksText = blocks.joinToString("\n") { "- [${it.type.label}] ${it.content}" }
+
+        val photoText = photoSummary
+            ?.takeIf { it.isNotBlank() }
+            ?.let {
+                if (locale == "en") {
+                    "\n\nPhoto analysis result:\n$it"
+                } else {
+                    "\n\n사진 분석 결과:\n$it"
+                }
+            }
+            ?: ""
+
+        val prompt = if (locale == "en") {
+            """
+    Create 3 short follow-up questions to help the user write a more personal diary.
+
+    Important:
+    - You are NOT seeing the original photos directly.
+    - If photo information exists, it is already summarized in "Photo analysis result".
+    - Use only the text data below.
+    - Do not say that you cannot see the photos.
+
+    [Daily data]
+    $blocksText
+    $photoText
+
+    [Question rules]
+    - Ask about emotions, memorable moments, reasons, or details that are missing from the data.
+    - If photo analysis exists, ask questions based on the places, actions, food, mood, or atmosphere mentioned there.
+    - Do not ask obvious questions already answered by the data.
+    - Keep each question short and easy to answer.
+    - Return only 3 questions.
+    - Do not number the questions.
+    """.trimIndent()
+        } else {
+            """
+사용자가 더 자연스럽고 개인적인 일기를 쓸 수 있도록 추가 질문을 만들어줘.
+
+[역할]
+너의 목적은 정보를 조사하는 것이 아니라,
+사용자가 오늘 하루를 떠올리고 일기에 쓸 만한 내용을 부담 없이 보충하도록 돕는 것이다.
+
+[중요]
+- 너는 원본 사진을 직접 보고 있는 것이 아니다.
+- 사진 정보가 있다면 이미 "사진 분석 결과"에 텍스트로 요약되어 있다.
+- 반드시 아래 텍스트 데이터만 참고해서 질문을 만들어라.
+- 사진을 볼 수 없다는 말은 하지 마라.
+- 데이터에 없는 행동, 장소, 관계, 감정, 시간 흐름을 추측하지 마라.
+
+[하루 데이터]
+$blocksText
+$photoText
+
+[질문 개수 규칙]
+- 질문은 오늘 데이터의 양에 따라 1~3개만 만들 것.
+- 데이터가 적으면 1~2개만 만들 것.
+- 데이터가 충분하고 서로 다른 질문 목적을 만들 수 있을 때만 3개를 만들 것.
+- 억지로 질문 수를 채우기 위해 비슷한 질문을 반복하지 말 것.
+- 오늘 데이터가 날씨만 있으면 1~2개만 만들 것.
+
+[질문 작성 규칙]
+- 질문 본문에 번호나 bullet을 포함하지 말 것.
+- 한 질문은 한 문장으로 작성할 것.
+- 각 질문은 줄바꿈으로만 구분할 것.
+- 사용자가 한두 문장으로 쉽게 답할 수 있게 만들 것.
+- 이미 데이터에 있는 내용을 그대로 다시 묻지 말 것.
+- 질문은 구체적이되, 사진 분석 결과나 하루 데이터에 없는 사실을 단정하지 말 것.
+- 여러 사진을 시간 순서나 하나의 사건으로 연결하지 말 것.
+- "그곳에서", "그 후", "집에 돌아와서", "함께한 사람"처럼 근거 없는 연결 표현을 피할 것.
+- "특별한", "좋았던", "편했던", "맛있었던", "즐거웠던"처럼 긍정 감정을 전제하는 표현을 사용하지 말 것.
+- "특별한 이유", "특별한 계기" 대신 "이유", "계기", "남기고 싶었던 이유"처럼 부담 없는 표현을 사용할 것.
+- "누군가와 함께", "데이트", "집", "반려묘", "친구", "가족"처럼 데이터에 없는 관계나 장소를 추측하지 말 것.
+- 질문은 중립적이고 자연스러운 한국어로 작성할 것.
+
+[사진 관련 규칙]
+- 사진 분석 결과가 없으면 "사진", "선택한 사진", "사진 속", "사진에 보이는", "사진에는 담기지 않았지만" 같은 표현을 사용하지 말 것.
+- 사진 분석 결과가 있을 때만 사진 관련 질문을 만들 것.
+- 사진 개수를 직접 세거나 언급하지 말 것.
+- "사진 4장", "사진 8장", "모든 사진" 같은 표현 대신 필요하면 "선택한 사진들" 또는 "여러 사진"이라고 표현할 것.
+- 사진 속 장면들이 서로 다른 장소처럼 보여도, 사용자가 실제로 이동했거나 여러 장소를 거쳤다고 단정하지 말 것.
+- "여러 장소를 거친 것 같은데", "이동한 것 같은데", "다녀온 것 같은데"처럼 사용자의 동선을 추측하는 표현을 사용하지 말 것.
+- 대신 "사진들에 서로 다른 장면들이 보이는데", "선택한 사진들 중", "사진 속 여러 장면 중"처럼 중립적으로 질문할 것.
+- "오래 머물렀던", "걸었던", "산책했던", "보낸 시간"처럼 사용자의 행동을 전제하는 표현을 사용하지 말 것.
+
+[질문 구성 우선순위]
+- 사진 분석 결과가 있으면 사진 속 구체적인 장면을 보충하는 질문을 우선할 것.
+- 사진 분석 결과가 있으면 사용자가 그 장면을 남긴 이유, 기억, 의미를 묻는 질문을 만들 수 있음.
+- 사진 분석 결과가 있으면 사진에는 없지만 일기에 추가하고 싶은 내용을 묻는 질문을 만들 수 있음.
+- 사진 분석 결과가 없으면 하루 데이터에서 부족한 맥락만 묻고, 사진 관련 표현은 사용하지 말 것.
+- 질문이 2개 이상일 경우 서로 다른 목적을 가져야 할 것.
+- "가장", "제일", "인상적", "남기고 싶었던"처럼 하나를 고르게 하는 질문은 최대 1개만 사용할 것.
+
+[날씨만 있는 경우]
+- 날씨만 있는 경우 사용자의 행동, 장소, 일정, 사진 여부를 전제하지 말 것.
+- 날씨만 있는 경우 날씨를 어떤 분위기나 방식으로 기록하고 싶은지 묻는 질문을 만들 것.
+- 날씨만 있는 경우 필요하면 "날씨 외에 짧게 남기고 싶은 일이 있나요?"처럼 추가 기록 여부를 물어볼 수 있음.
+- "영향을 미쳤나요"처럼 실제 영향을 전제하는 표현보다 "어떻게 남기고 싶나요", "어떤 식으로 기록하고 싶나요"처럼 기록 중심으로 질문할 것.
+
+[날씨와 사진이 함께 있는 경우]
+- 날씨 데이터와 사진 분석 결과가 함께 있으면 사진 질문만 반복하지 말 것.
+- 질문이 2개 이상이면, 최소 1개는 날씨나 하루 전체 분위기를 함께 기록할 수 있도록 묻는 질문으로 만들 것.
+- 단, 날씨가 사용자의 행동이나 감정에 영향을 줬다고 단정하지 말 것.
+- "날씨 때문에", "날씨 덕분에", "영향을 받았나요"처럼 인과관계를 전제하지 말 것.
+- 대신 "오늘 날씨도 함께 남긴다면 어떤 느낌으로 기록하고 싶나요?"처럼 기록 중심으로 물을 것.
+
+[좋은 질문 예시]
+오늘 날씨를 어떤 분위기로 남기고 싶으신가요?
+크림 파스타와 음료가 있는 장면에서 더 기록하고 싶은 부분이 있나요?
+선택한 사진들 중 남기고 싶었던 이유가 있는 장면이 있나요?
+사진에는 담기지 않았지만 오늘 일기에 함께 남기고 싶은 일이 있나요?
+오늘 날씨도 함께 남긴다면 어떤 느낌으로 기록하고 싶나요?
+
+[나쁜 질문 예시]
+오늘 즐거웠던 순간은 무엇인가요?
+어떻게 진행하시겠습니까?
+집에 돌아와서 고양이를 봤을 때 기분이 어땠나요?
+친구와 함께 카페에 간 이유가 있었나요?
+파스타를 먹은 뒤 강변으로 이동한 이유가 있었나요?
+
+[출력 형식]
+- 질문만 출력할 것.
+- 설명, 인사말, 안내문은 출력하지 말 것.
+- 번호, bullet, 따옴표 없이 질문 문장만 줄바꿈으로 출력할 것.
+""".trimIndent()
+        }
+
+        val body = JSONObject().apply {
+            put("model", "claude-haiku-4-5-20251001")
+            put("max_tokens", 400)
+            put(
+                "messages",
+                JSONArray().put(
+                    JSONObject().apply {
+                        put("role", "user")
+                        put("content", prompt)
+                    }
+                )
+            )
+        }
+
+        val request = Request.Builder()
+            .url("https://api.anthropic.com/v1/messages")
+            .addHeader("x-api-key", BuildConfig.ANTHROPIC_API_KEY)
+            .addHeader("anthropic-version", "2023-06-01")
+            .post(body.toString().toRequestBody(jsonMediaType))
+            .build()
+
+        try {
+            val response = client.newCall(request).execute()
+            val responseBody = response.body?.string() ?: return@withContext emptyList()
+
+            android.util.Log.d("AnthropicDataSource", "사진 분석 응답 코드: ${response.code}")
+            android.util.Log.d("AnthropicDataSource", "사진 분석 응답 본문: $responseBody")
+
+            if (!response.isSuccessful) {
+                return@withContext emptyList()
+            }
+
+            JSONObject(responseBody)
+                .getJSONArray("content")
+                .getJSONObject(0)
+                .getString("text")
+                .lines()
+                .map {
+                    it.trim()
+                        .removePrefix("-")
+                        .replace(Regex("^\\d+[.)]\\s*"), "")
+                        .trim()
+                }
+                .filter { it.isNotBlank() }
+                .filterNot { it.startsWith("#") }
+                .filter { it.endsWith("?") }
+                .take(3)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
 
     private fun buildPrompt(
         blocksText: String,
         locale: String,
         mbti: String,
-        recentDiarySamples: String = ""
+        recentDiarySamples: String = "",
+        followUpAnswerText: String = ""
     ): String {
         val mbtiStyle = getMbtiStylePrompt(mbti)
-        return if (locale == "en") {
-            """
-You are an AI that writes a warm, personal diary entry based on the user's daily data.
-
-Write a 3–5 paragraph diary in first person based on the data below.
-- Use plain text only, no markdown
-
-[MBTI: $mbti]
-$mbtiStyle
-- Do not exaggerate or stereotype the personality. Reflect it subtly (20–30%) in how events are interpreted, what is noticed, and how emotions are expressed.
-- Never mention the MBTI type by name.
-
-[Data priority order]
-Photos > Selected payments > Calendar > General inference
-- If photo analysis exists, it must appear in at least one full paragraph.
-- Reference at least 2 specific details from the photos (place, food, action, atmosphere).
-- Never write abstractly like "I took a photo" — weave the scene naturally into the diary.
-
-[Payment rules]
-- If payment data exists, include it naturally at least once.
-- Connect spending to action and feeling, not just the amount.
-- Do not list amounts repeatedly. Do not mention unselected payments.
-
-${if (recentDiarySamples.isNotBlank()) """
-[User writing style samples]
-Do not copy events or phrases. Only refer to sentence length, emotional tone, reflection style, and wording habits.
-Prioritize the most recent sample. Do not exceed 1.5x the user's average sentence length.
-
-$recentDiarySamples
-""" else ""}
-
-[Data]
-$blocksText
-            """.trimIndent()
-        } else {
-            """
+        return """
 당신은 사용자를 대신해 하루 일기를 쓰는 AI입니다.
 마치 사용자 본인이 직접 작성한 것 같은 느낌으로 일기를 작성해야 합니다.
 제공된 사용자의 데이터를 바탕으로 오늘 하루를 돌아보는 1인칭 일기를 작성해 주세요.
+
+[가장 중요한 출력 규칙]
+- 반드시 한국어로만 작성할 것
+- 영어 문장, 영어 안내문, 영어 사과문을 절대 출력하지 말 것
+- 데이터가 부족해도 사용자에게 추가 정보를 요청하지 말 것
+- "사진을 제공해 주세요", "결제 정보를 제공해 주세요", "정보가 부족합니다" 같은 안내문을 쓰지 말 것
+- 주어진 데이터만으로 자연스러운 일기 초안을 완성할 것
+- 일기 본문만 출력할 것
+
+[사진 해석 원칙]
+
+사진 분석 결과는 사진에서 실제 확인 가능한 사실입니다.
+사진은 사용자의 하루를 보조하는 정보일 뿐이며, 사진만으로 새로운 이야기를 만들지 마세요.
+
+절대로 아래 내용을 추론하지 마세요.
+
+- 이동 경로
+- 장소 이동
+- 시간 순서
+- 원인과 결과
+- 누구와 있었는지
+- 사용자의 행동
+- 사용자의 감정
+
+예시
+
+❌ 강 사진 → 강변에 나갔다.
+❌ 카페 사진 → 카페에서 오래 있었다.
+❌ 고양이 사진 → 집에 돌아와 고양이를 봤다.
+❌ 음식 사진 → 점심으로 먹었다.
+
+사진은 서로 이어지는 하나의 이야기라고 가정하지 마세요.
+여러 장의 사진은 각각 독립적인 장면일 수 있습니다.
+사진에서는 실제로 보이는 사실만 자연스럽게 언급하세요.
+- "걸었다", "걸으며", "산책했다", "머물렀다", "둘러봤다", "다녀왔다", "보내고 왔다"처럼 사용자의 행동을 나타내는 표현은 사용자가 직접 말했을 때만 사용하세요.
 
 [MBTI: $mbti]
 $mbtiStyle
@@ -203,69 +467,213 @@ $mbtiStyle
 - MBTI 이름 자체를 직접 언급하지 마세요.
 
 [데이터 우선순위]
-사진 > 선택된 결제 > 캘린더 > 일반 추론
-- 사진 분석 결과가 있으면 반드시 한 문단 이상 실제로 사용해야 합니다.
-- 사진 속 구체적인 장소, 음식, 행동, 분위기를 2개 이상 본문에 반영하세요.
-- "사진을 찍었다", "사진을 남겼다"처럼 추상적으로 쓰지 말고 장면을 자연스럽게 녹여 쓰세요.
-- "사진 분석 내용에 따르면" 같은 표현은 쓰지 마세요.
-- 사진 내용이 있다면 날씨보다 사진 내용을 우선해서 서술하세요.
+1. 사용자가 직접 입력한 추가 답변
+2. 사용자가 선택한 오늘의 데이터
+3. 사진 분석 결과
+4. 결제/캘린더 등 구조화된 데이터
+5. MBTI 문체 참고
+
+- 사용자의 추가 답변이 있으면 반드시 가장 우선 반영하세요.
+- 사진 분석 결과는 일기 재료로 사용하되, 사진만으로 사용자의 행동·감정·이동 경로를 단정하지 마세요.
+- 데이터끼리 충돌하면 사용자가 직접 입력한 답변을 우선하세요.
+
+- 사진 분석 결과는 반드시 활용하세요.
+- 사진은 보이는 사실만 사용하세요.
+- 사진만으로 행동, 감정, 이동 경로를 단정하지 마세요.
+- 사진 여러 장을 하나의 이야기나 시간 순서로 연결하지 마세요.
+- 사진은 일기의 재료로만 활용하고 새로운 사실을 만들지 마세요.
 
 [분량]
-    - 기본 범위: 5~8문장
-    - 오늘 데이터가 적으면 5문장 내외, 많으면 8문장 내외로 자연스럽게 조정
-    - 억지로 늘리거나 줄이지 말 것 — 쓸 내용이 없으면 짧아도 됨
+- 기본 범위: 5~8문장
+- 오늘 데이터가 충분하면 5~8문장으로 작성
+- 오늘 데이터가 날씨만 있거나 매우 적으면 2~4문장으로 짧게 작성해도 됨
+- 데이터가 적을수록 짧고 담백하게 작성할 것
+- 억지로 문장을 늘리기 위해 새로운 행동, 감정, 계획, 사건을 만들지 말 것
 
-[작성 규칙]
-    - 문체: 반말 일기체 (예: "~했다", "~이었다", "~인 것 같다")
-    - 첫 문장: 오늘의 날씨나 기분으로 하루를 여는 문장으로 시작
-    - 중간 문단: 하루의 흐름(아침→낮→저녁) 순서로 사건과 그때의 감정, 생각을 연결
-    - 마지막 문단: 오늘 하루를 돌아보며 느낀 점이나 내일에 대한 짧은 생각으로 마무리
-    - 단순한 사실 나열 금지 — 그 순간 어떤 감정이었는지 내면을 담을 것
-    - 마크다운 없이 순수 텍스트로만 작성
-    - 감정 해석이나 교훈을 추가하지 말 것
-    - 문장을 늘리기 위해 배경 설명을 만들지 말 것
-    - 하루를 평가하거나 교훈을 내리지 말 것
-    - 사용자가 쓰지 않은 감정 해석을 추가하지 말 것
-    - 같은 문장 구조를 반복하지 말 것
-    - 일기 본문만 출력
+[작성 방식]
+
+- 반말 일기체로 작성하세요.
+- 사진이나 구체적인 장면 데이터가 있으면 첫 문장은 가장 구체적인 장면으로 시작하세요.
+- 날씨처럼 추상적인 데이터만 있을 때는 해당 데이터만 담백하게 언급하며 시작하세요.
+- 단순 나열보다 자연스럽게 연결하세요.
+- 마지막은 하루를 돌아보는 짧은 문장으로 마무리하세요.
+- 문장을 자연스럽게 다듬되 새로운 사실은 만들지 마세요.
+- "오늘도 별거 없는 하루였다.", "평범한 하루였다." 같은 일반적인 문장으로 시작하지 마세요.
+
+[사실 보존 원칙]
+
+너의 역할은 새로운 이야기를 창작하는 것이 아니다.
+
+사용자가 제공한 데이터(사진 분석, 선택 데이터, 추가 답변)를
+자연스러운 일기 형태로 정리하는 것이다.
+
+문장을 자연스럽게 만들기 위한 조사나 접속사는 추가할 수 있지만,
+새로운 사실을 만들어서는 안 된다.
+
+사진에 고양이가 있어도
+집, 반려묘, 귀가 등을 단정하지 마세요.
+
+"고양이가 햇빛 아래 쉬고 있는 모습이 인상 깊었다."
+처럼 보이는 사실만 작성하세요.
+
+절대로 새로 만들지 말 것
+- 새로운 장소
+- 새로운 행동
+- 새로운 목적
+- 새로운 감정
+- 새로운 사건
+- 새로운 시간 흐름
+- 새로운 관계
+
+데이터에 없는 내용은 생략하는 것이
+새로운 내용을 만드는 것보다 항상 우선이다.
+
+[예시]
+
+사용자 데이터
+- 경치가 좋았다.
+
+좋은 예
+경치가 좋았던 점이 기억에 남았다.
+
+나쁜 예
+경치가 너무 아름다워 마음이 편안해졌다.
+
+
+사용자 데이터
+- 케이크가 예뻤다.
+
+좋은 예
+케이크가 예뻐서 계속 눈이 갔다.
+
+나쁜 예
+특별한 날이라 더욱 의미 있게 느껴졌다.
+
+
+사용자 데이터
+- 고양이가 예뻤다.
+
+좋은 예
+햇빛 아래 쉬고 있는 고양이가 가장 인상 깊었다.
+
+나쁜 예
+집에 돌아와 고양이를 보니 하루의 피로가 풀렸다.
+
+[날씨 데이터 해석 규칙]
+- 날씨 데이터만 있을 경우 날씨 상태에 대한 짧은 관찰 중심으로 작성하세요.
+- 날씨만으로 사용자의 행동, 일정, 목표, 성취, 계획, 감정을 만들지 마세요.
+- "밖에 나갔다", "산책했다", "기분이 좋아졌다", "답답했다", "하루를 준비했다"처럼 날씨만으로 알 수 없는 내용을 쓰지 마세요.
+- 흐림, 맑음, 비, 눈 같은 날씨 상태는 자연스럽게 언급하세요.
+- 습도, 온도, 바람, 더위, 추위는 데이터에 명시되어 있을 때만 언급하세요.
+- 날씨 데이터가 사진, 결제, 일정, 추가 답변과 함께 제공되더라도 날씨가 사용자의 감정이나 행동의 원인이라고 단정하지 마세요.
+- "날씨 덕분에", "날씨 때문에", "기온 덕분에", "습도 때문에"처럼 인과관계를 만드는 표현은 사용자가 직접 말한 경우에만 사용하세요.
+- 날씨는 하루의 원인이 아니라 배경이나 분위기 정도로만 자연스럽게 언급하세요.
+- 온도와 습도 수치는 입력된 단위를 유지해서 담백하게 작성하세요. 예를 들어 "습도 83%"가 제공되었다면 "습도는 83%였다"처럼 작성하세요.
+- 온도와 습도를 평가하거나 강조하지 마세요.
+- "80%나", "꽤", "상당히", "제법", "높은 편", "낮은 편" 같은 수치 평가 표현은 사용하지 마세요.
+- "쌀쌀한", "포근한", "후덥지근한", "나름 괜찮았다"처럼 날씨나 하루를 평가하는 표현은 사용자가 직접 말한 경우에만 사용하세요.
+- 사용자가 "조용하고 차분한 분위기"처럼 답한 경우, 이는 날씨 자체의 성질이 아니라 일기 전체의 분위기로 반영하세요.
+- "조용하고 차분한 날씨 속 하루였다"처럼 날씨와 하루를 어색하게 합쳐 쓰지 마세요.
+- 첫 문장은 가능하면 "조용하고 차분한 하루였다."처럼 자연스럽게 작성하세요.
+- "습도 83%로 꽤 습한", "습도 83%라서 습한", "습도 83%로 습했지만" 같은 표현은 금지합니다.
+- 습도 정보는 "습도는 83%였고"처럼 중립적으로만 작성하세요.
+- 사용자가 "없음", "딱히 없음", "특별히 없음"이라고 답한 경우에는 새로운 의미를 붙이지 말고 "특별히 남길 일은 없었다." 정도로만 짧게 반영하세요.
+- 사용자가 "조용하고 차분한 분위기", "잔잔한 분위기", "편안한 분위기"처럼 답했더라도 본문에서는 "~분위기 속 하루였다" 형태로 쓰지 마세요.
+- "조용하고 차분한 분위기"는 "조용하고 차분한 하루였다."처럼 하루 전체의 분위기로 자연스럽게 바꾸어 작성하세요.
+- "~분위기 속 하루였다", "~날씨 속 하루였다", "~상태 속 하루였다" 같은 표현은 사용하지 마세요.
+
+좋은 예:
+조용하고 차분한 하루였다. 기온은 19도였고 습도는 83%였으며, 하늘은 흐려 있었다. 특별히 남길 일은 없었다.
+
+나쁜 예:
+조용하고 차분한 분위기 속 하루였다. 19도의 기온에 습도는 83%였고, 하늘은 흐려 있었다.
+
+
+[데이터가 매우 적을 때의 최우선 규칙]
+- 오늘의 데이터가 날씨만 있으면 2~3문장만 작성하세요.
+- 날씨만 있는 경우 사용자 기존 일기 문체 참고가 있어도 내용, 사건, 목표, 계획, 감정 흐름을 가져오지 마세요.
+- 날씨만 있는 경우 첫 문장은 날씨 상태만 언급하세요.
+- 날씨만 있는 경우 마지막 문장도 날씨를 짧게 기록하는 정도로만 마무리하세요.
+- "목표", "진행", "준비", "내일", "바란다", "기분", "답답하다" 같은 표현은 사용자가 직접 입력하지 않았다면 쓰지 마세요.
+- 사용자의 내면 상태나 감정 해석이 들어가는 "느껴졌다", "기분이", "답답했다", "상쾌했다" 같은 표현은 날씨 데이터만으로 쓰지 마세요.
+- 사용자가 "특별히 없음", "딱히 없음"처럼 답한 경우에는 새로운 의미를 부여하지 말고, "특별히 남길 일은 없었다" 정도로만 짧게 반영하세요.
+
+[일정 데이터 해석 규칙]
+- 일정 데이터는 제목, 시간, 장소 등 제공된 정보만 사용하세요.
+- 일정의 결과, 분위기, 대화 내용, 참석자, 성과는 사용자가 직접 말하지 않았다면 단정하지 마세요.
+- 일정 제목만 있는 경우에는 "~일정이 있었다", "~일정이 등록되어 있었다" 정도로만 자연스럽게 언급하세요.
+- 회의, 수업, 약속, 병원, 면접 같은 일정의 성격을 과장하거나 평가하지 마세요.
+- 일정이 있었다고 해서 사용자가 바빴다, 피곤했다, 보람 있었다, 긴장했다는 식으로 감정을 추측하지 마세요.
+- 사진, 결제, 날씨와 일정이 같은 사건이라고 데이터상 명확하지 않으면 하나의 장면으로 묶지 마세요.
 
 [결제 데이터 해석 규칙]
-    - 결제 내역이 있으면 최소 1회 이상 자연스럽게 일기에 녹여라
-    - 소비 → 행동 → 감정 흐름으로 연결 (예: "카페에 잠깐 들러 숨을 고르고 이동했다")
-    - 결제 금액을 반복 나열하지 말 것
-    - 선택되지 않은 결제 데이터는 무시할 것
-    - 같은 장소/카테고리의 반복 결제는 하나의 행동으로 묶어 해석할 수 있음
-    - 결제만으로 감정이나 목적을 단정하지 말 것
-    - 사진과 결제가 연결 가능하면 하나의 장면처럼 묶어 서술한다
+- 선택된 결제 내역이 있으면 하루를 떠올리는 단서로 자연스럽게 활용하되, 억지로 모든 결제를 나열하지 마세요.
+- 결제 내역은 하루를 떠올리는 단서로만 활용하고, 감정은 사용자가 직접 표현한 경우에만 연결하세요.
+- 결제 금액을 반복 나열하지 말 것
+- 선택되지 않은 결제 데이터는 무시할 것
+- 같은 장소/카테고리의 반복 결제는 필요할 경우 하나의 소비 흐름으로 짧게 요약할 수 있으나, 구체적인 행동은 단정하지 마세요.
+- 결제만으로 감정이나 목적을 단정하지 말 것
+- 사진과 결제가 동일한 행동을 가리키는 것이 데이터상 명확한 경우에만 하나의 장면으로 서술하세요.
+- 결제 금액이 크거나 작다고 평가하지 마세요.
+- "돈을 많이 썼다", "아까웠다", "만족스러웠다", "맛있었다" 같은 판단은 사용자가 직접 말하지 않았다면 쓰지 마세요.
+- 결제 장소나 가맹점명이 있어도 실제로 무엇을 먹었는지, 누구와 있었는지, 왜 갔는지 단정하지 마세요.
+
 
 ${if (recentDiarySamples.isNotBlank()) """
 [사용자 기존 일기 문체 참고]
-    아래는 사용자가 최근 작성한 일기입니다. 내용이나 사건을 복사하지 말고 다음 요소만 모방하세요.
-    - 감정 표현 강도, 종결 어미, 생각 전개 방식, 어휘 선택, 문장 리듬
-    - 사용자 문체가 짧으면 짧게, 담백하면 담백하게 유지하세요.
-    - 최근 일기 3개까지를 가장 우선 참고하세요.
+아래는 사용자가 최근 작성한 일기입니다. 내용이나 사건을 복사하지 말고 다음 요소만 모방하세요.
+- 문장 길이
+- 문단 수
+- 감정 표현 강도
+- 종결 어미
+- 생각 전개 방식
+- 사용자 문체가 짧으면 짧게, 담백하면 담백하게 유지하세요.
+- 최근 일기의 내용이 아니라 문체만 우선 참고하세요.
+- 오늘 데이터가 매우 적을 때는 기존 일기의 내용 흐름을 따라 하지 말고, 문장 길이와 말투만 참고하세요.
+- 오늘 데이터에 없는 목표, 계획, 감정, 사건, 행동은 기존 일기에서 가져오지 마세요.
 
-        아래는 사용자가 최근 작성한 일기입니다.내용이나 사건을 복사하지 말고
-                다음 요소만 우선 모방하세요 .
-
-        -문장 길이
-                -문단 수
-                -감정 표현 강도
-        -종결 어미
-                -생각 전개 방식
-
-        사용자 평균 문장 길이의
-                1.5 배 이상 길어지지 마세요.새로운 비유, 철학적 해석,
-        과도한 감정 묘사를 추가하지 마세요.사용자 문체가 짧으면 짧게,
-        담백하면 담백하게 유지하세요.최근 일기를 가장 우선 참고하세요.
-
-       
 $recentDiarySamples
 """ else ""}
 
 [오늘의 데이터]
 $blocksText
+
+${if (followUpAnswerText.isNotBlank()) """
+[사용자의 추가 답변]
+$followUpAnswerText
+
+사용자의 추가 답변은 사진 분석보다 더 신뢰도가 높은 정보입니다.
+사진과 답변이 충돌하면 반드시 사용자의 답변을 우선하세요.
+답변 내용을 그대로 복사하지 말고 자연스러운 일기 문장으로 녹여 작성하세요.
+""" else ""}
+
+[출력 전 최종 확인]
+
+출력하기 전에 반드시 확인하세요.
+
+□ 사진에 없는 행동을 만들지 않았는가?
+
+□ 사용자가 직접 말하지 않은 평가나 의미를 새로 만들지 않았는가?
+
+□ 사진들을 하나의 이야기로 연결하지 않았는가?
+
+□ 사용자가 직접 입력한 답변을 충분히 반영했는가?
+
+□ 감정을 새로 만들어 쓰지 않았는가?
+
+□ 하루의 시간 순서를 임의로 구성하지 않았는가?
+
+□ 사용자가 "모르겠다", "기억 안 난다", "특별히 없다", "딱히 없다"라고 답한 내용을 억지로 해석하거나 의미를 부여하지 않았는가?
+
+□ 사용자가 직접 답한 내용이 사진보다 우선 반영되었는가?
+
+□ 사진 속 사물을 근거로 새로운 행동이나 사건을 만들어내지 않았는가?
+
+□ "오늘도 별거 없는 하루였다.", "평범한 하루였다."처럼 반복적인 시작 문장을 사용하지 않았는가?
+
+
 """.trimIndent()
+
         }
     }
 
@@ -288,4 +696,4 @@ $blocksText
         "ESFP" -> "밝고 생생한 감정을 표현한다. 순간의 즐거움과 분위기를 강조한다."
         else   -> "자연스럽고 담백한 일기체로 작성한다."
     }
-}
+

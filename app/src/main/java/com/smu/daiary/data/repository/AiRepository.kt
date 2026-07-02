@@ -9,12 +9,24 @@ class AiRepository(
     suspend fun analyzePhotos(photoBase64List: List<String>): String =
         dataSource.analyzePhotos(photoBase64List)
 
+    suspend fun generateFollowUpQuestions(
+        blocks: List<ContentBlock>,
+        locale: String,
+        photoSummary: String? = null
+    ): List<String> =
+        dataSource.generateFollowUpQuestions(
+            blocks = blocks,
+            locale = locale,
+            photoSummary = photoSummary
+        )
+
     suspend fun generateDraft(
         blocks: List<ContentBlock>,
         locale: String,
         mbti: String,
         photoSummary: String? = null,
-        recentDiarySamples: String = ""
+        recentDiarySamples: String = "",
+        followUpAnswers: Map<Int, String> = emptyMap()
     ): Result<String> =
         runCatching {
             dataSource.generateDiary(
@@ -22,7 +34,8 @@ class AiRepository(
                 locale = locale,
                 mbti = mbti,
                 photoSummary = photoSummary,
-                recentDiarySamples = recentDiarySamples
+                recentDiarySamples = recentDiarySamples,
+                followUpAnswers = followUpAnswers
             )
         }
 }

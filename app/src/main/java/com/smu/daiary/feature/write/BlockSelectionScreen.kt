@@ -166,7 +166,8 @@ fun BlockSelectionScreen(
         bottomBar = {
             Surface(color = wc.SurfaceBg, shadowElevation = 8.dp) {
                 Button(
-                    onClick = { viewModel.generateDraft() },
+                    onClick = { viewModel.generateFollowUpQuestions()
+                        onNext()},
                     enabled = !isLoading && !isGenerating,
                     modifier = Modifier
                         .fillMaxWidth()
